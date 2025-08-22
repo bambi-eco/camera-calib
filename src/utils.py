@@ -157,7 +157,7 @@ def image_resize(
 # from : https://gist.github.com/woolpeeker/d7e1821e1b5c556b32aafe10b7a1b7e8
 
 # drawMatches numpy version
-def draw_matches(img1, kp1, img2, kp2, matches, color=None): 
+def draw_matches(img1, kp1, img2, kp2, matches=None, color=None): 
     """Draws lines between matching keypoints of two images.  
     Keypoints not in a matching pair are not drawn.
     Places the images side by side in a new image and draws circles 
@@ -169,7 +169,7 @@ def draw_matches(img1, kp1, img2, kp2, matches, color=None):
         img2: An openCV image ndarray of the same format and with the same 
         element type as img1.
         kp2: ndarray [n2, 2]
-        matches: ndarray [n_match, 2]
+        matches: ndarray [n_match, 2] or None. if None, we asume a 1:1 match
         img1 keypoints and whose queryIdx attribute refers to img2 keypoints.
         color: The color of the circles and connecting lines drawn on the images.  
         A 3-tuple for color images, a scalar for grayscale images.  If None, these
@@ -185,6 +185,9 @@ def draw_matches(img1, kp1, img2, kp2, matches, color=None):
     # Place images onto the new image.
     new_img[0:img1.shape[0],0:img1.shape[1]] = img1
     new_img[0:img2.shape[0],img1.shape[1]:img1.shape[1]+img2.shape[1]] = img2
+
+    if matches is None:
+        matches = zip(np.arange(len(kp1)), np.arange(len(kp2)))
     
     # Draw lines between matches.  Make sure to offset kp coords in second image appropriately.
     r = 15

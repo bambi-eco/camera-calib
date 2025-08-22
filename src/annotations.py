@@ -491,9 +491,9 @@ def points_from_pairs(pairs):
     # construct points with numpy
     T_points = np.zeros([0,2])
     W_points = np.zeros([0,2])
-    TW_names = []
+    names = []
 
-    for i, pair in enumerate(pairs):
+    for  _, pair in enumerate(pairs):
 
         T = pair["T"]
         W = pair["W"]
@@ -509,11 +509,11 @@ def points_from_pairs(pairs):
             # T (thermal)
             T_points = np.concatenate((T_points, [[tx, ty]]))
 
-            # add names
-            TW_names.append(T.name + "_" + label)
+            names.append(T.name + "_" + label)
+
 
     # reshape the points to (n, 1, 2)
     T_points = T_points.reshape(-1, 1, 2)
     W_points = W_points.reshape(-1, 1, 2)
 
-    return T_points, W_points, TW_names
+    return T_points, W_points, names

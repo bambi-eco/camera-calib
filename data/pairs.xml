@@ -3,27 +3,75 @@
    <image id="W2" name="frame_000022.jpg" width="4000" height="3000">
       <points label="0" occluded="0" source="manual" points="2270.0,1630.0" z_order="0"/>
       <points label="1" occluded="0" source="manual" points="3107.0,1550.0" z_order="0"/>
-      <points label="2" occluded="0" source="manual" points="1767,1190" z_order="0"/>
+      <points label="2" occluded="0" source="manual" points="1767.0,1190.0" z_order="0"/>
+      <points label="3" occluded="0" source="manual" points="940,610" z_order="0"/>
+      <points label="4" occluded="0" source="manual" points="1490,620" z_order="0"/>
+      <points label="5" occluded="0" source="manual" points="2550,1625" z_order="0"/>
+      <points label="6" occluded="0" source="manual" points="2740,1095" z_order="0"/>
+      <points label="7" occluded="0" source="manual" points="3235,1282" z_order="0"/>
+      <points label="8" occluded="0" source="manual" points="2835,515" z_order="0"/>
    </image>
    <image id="T2" name="frame_000022.jpg" width="1280" height="1024">
       <points label="0" occluded="0" source="manual" points="770.0,570.0" z_order="0"/>
       <points label="1" occluded="0" source="manual" points="1181.0,520.0" z_order="0"/>
-      <points label="2" occluded="0" source="manual" points="503,339" z_order="0"/>
+      <points label="2" occluded="0" source="manual" points="503.0,339.0" z_order="0"/>
+      <points label="3" occluded="0" source="manual" points="111,80" z_order="0"/>
+      <points label="4" occluded="0" source="manual" points="366,70" z_order="0"/>
+      <points label="5" occluded="0" source="manual" points="916,568" z_order="0"/>
+      <points label="6" occluded="0" source="manual" points="999,293" z_order="0"/>
+      <points label="7" occluded="0" source="manual" points="1236,389" z_order="0"/>
+      <points label="8" occluded="0" source="manual" points="1034,17" z_order="0"/>
    </image>
    <image id="W4" name="frame_000024.jpg" width="4000" height="3000">
-      <points label="0" occluded="0" source="manual" points="1272,1607" z_order="0"/>
-      <points label="1" occluded="0" source="manual" points="1977,1092" z_order="0"/>
+      <points label="0" occluded="0" source="manual" points="1272.0,1607.0" z_order="0"/>
+      <points label="1" occluded="0" source="manual" points="1977.0,1092.0" z_order="0"/>
+      <points label="2" occluded="0" source="manual" points="3200,677" z_order="0"/>
+      <points label="3" occluded="0" source="manual" points="3300,1622" z_order="0"/>
+      <points label="4" occluded="0" source="manual" points="2430,1535" z_order="0"/>
+      <points label="5" occluded="0" source="manual" points="982,615" z_order="0"/>
+      <points label="6" occluded="0" source="manual" points="895,1177" z_order="0"/>
+      <points label="7" occluded="0" source="manual" points="1565,1610" z_order="0"/>
    </image>
    <image id="T4" name="frame_000024.jpg" width="1280" height="1024">
-      <points label="0" occluded="0" source="manual" points="263,562" z_order="0"/>
-      <points label="1" occluded="0" source="manual" points="617,287" z_order="0"/>
+      <points label="0" occluded="0" source="manual" points="263.0,562.0" z_order="0"/>
+      <points label="1" occluded="0" source="manual" points="617.0,287.0" z_order="0"/>
+      <points label="2" occluded="0" source="manual" points="1210,100" z_order="0"/>
+      <points label="3" occluded="0" source="manual" points="1268,552" z_order="0"/>
+      <points label="4" occluded="0" source="manual" points="856,515" z_order="0"/>
+      <points label="5" occluded="0" source="manual" points="135,83" z_order="0"/>
+      <points label="6" occluded="0" source="manual" points="85,348" z_order="0"/>
+      <points label="7" occluded="0" source="manual" points="405,564" z_order="0"/>
    </image>
    <image id="W5" name="frame_000025.jpg" width="4000" height="3000">
-      <points label="0" occluded="0" source="manual" points="2970,1192" z_order="0"/>
-      <points label="1" occluded="0" source="manual" points="2802,1607" z_order="0"/>
+      <points label="0" occluded="0" source="manual" points="2970.0,1192.0" z_order="0"/>
+      <points label="1" occluded="0" source="manual" points="2802.0,1607.0" z_order="0"/>
+      <points label="2" occluded="0" source="manual" points="782,1600" z_order="0"/>
+      <points label="3" occluded="0" source="manual" points="2535,1607" z_order="0"/>
+      <points label="4" occluded="0" source="manual" points="2965,675" z_order="0"/>
+      <points label="5" occluded="0" source="manual" points="3317,542" z_order="0"/>
+      <points label="6" occluded="0" source="manual" points="1497,800" z_order="0"/>
+      <points label="7" occluded="0" source="manual" points="1610,1075" z_order="0"/>
+      <points label="8" occluded="0" source="manual" points="1687,1267" z_order="0"/>
+      <points label="9" occluded="0" source="manual" points="1025,1250" z_order="0"/>
+      <points label="10" occluded="0" source="manual" points="877,1027" z_order="0"/>
+      <points label="11" occluded="0" source="manual" points="760,1207" z_order="0"/>
+      <points label="12" occluded="0" source="manual" points="1072,1592" z_order="0"/>
+      <points label="13" occluded="0" source="manual" points="1965,1517" z_order="0"/>
    </image>
    <image id="T5" name="frame_000025.jpg" width="1280" height="1024">
-      <points label="0" occluded="0" source="manual" points="1117,346" z_order="0"/>
-      <points label="1" occluded="0" source="manual" points="1045,552" z_order="0"/>
+      <points label="0" occluded="0" source="manual" points="1117.0,346.0" z_order="0"/>
+      <points label="1" occluded="0" source="manual" points="1045.0,552.0" z_order="0"/>
+      <points label="2" occluded="0" source="manual" points="34,555" z_order="0"/>
+      <points label="3" occluded="0" source="manual" points="912,556" z_order="0"/>
+      <points label="4" occluded="0" source="manual" points="1097,93" z_order="0"/>
+      <points label="5" occluded="0" source="manual" points="1252,43" z_order="0"/>
+      <points label="6" occluded="0" source="manual" points="379,157" z_order="0"/>
+      <points label="7" occluded="0" source="manual" points="428,285" z_order="0"/>
+      <points label="8" occluded="0" source="manual" points="467,379" z_order="0"/>
+      <points label="9" occluded="0" source="manual" points="145,383" z_order="0"/>
+      <points label="10" occluded="0" source="manual" points="80,279" z_order="0"/>
+      <points label="11" occluded="0" source="manual" points="26,370" z_order="0"/>
+      <points label="12" occluded="0" source="manual" points="168,558" z_order="0"/>
+      <points label="13" occluded="0" source="manual" points="610,512" z_order="0"/>
    </image>
 </annotations>

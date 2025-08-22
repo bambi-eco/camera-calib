@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any, List
 import json
 import numpy as np
 import numpy.typing as npt
-
+import os
 
 class Intrinsics:
     """
@@ -18,16 +18,16 @@ class Intrinsics:
     """
     
     def __init__(self, 
-                 ret: float, 
                  mtx: npt.NDArray[np.float64], 
                  dist: npt.NDArray[np.float64],
+                 ret: Optional[float] = None,
                  name: Optional[str] = None):
         """
         Initialize camera intrinsics.
         
-        :param ret: RMS reprojection error from calibration
         :param mtx: 3x3 camera calibration matrix 
         :param dist: Distortion coefficients (typically 5 elements: k1, k2, p1, p2, k3)
+        :param ret: Optional RMS reprojection error from calibration
         :param name: Optional name identifier for the camera
         :raises ValueError: If matrix dimensions are incorrect
         """
@@ -90,6 +90,67 @@ class Intrinsics:
         """Third radial distortion coefficient."""
         return self.dist[4] if len(self.dist) > 4 else 0.0
     
+    def __getitem__(self, key: str) -> npt.NDArray[np.float64]:
+        """
+        Access intrinsic parameters by key.
+        
+        :param key: 'mtx', 'K' (camera matrix), 'dist' (distortion coefficients)
+        :return: Corresponding numpy array
+        :raises KeyError: If key is not recognized
+        """
+        key_lower = key.lower()
+        if key_lower in ['mtx', 'k']:
+            return self.mtx
+        elif key_lower == 'dist':
+            return self.dist
+        else:
+            raise KeyError(f"Invalid key '{key}'. Use 'mtx'/'K' or 'dist'")
+    
+    def set(self, 
+            fx: Optional[float] = None,
+            fy: Optional[float] = None, 
+            cx: Optional[float] = None,
+            cy: Optional[float] = None,
+            dist: Optional[npt.NDArray[np.float64]] = None,
+            ret: Optional[float] = None,
+            name: Optional[str] = None) -> None:
+        """
+        Update intrinsic parameters.
+        
+        :param fx: Focal length in x direction
+        :param fy: Focal length in y direction  
+        :param cx: Principal point x coordinate
+        :param cy: Principal point y coordinate
+        :param dist: Distortion coefficients array
+        :param ret: RMS reprojection error
+        :param name: Camera name
+        """
+        if fx is not None:
+            self.mtx[0, 0] = fx
+        if fy is not None:
+            self.mtx[1, 1] = fy
+        if cx is not None:
+            self.mtx[0, 2] = cx
+        if cy is not None:
+            self.mtx[1, 2] = cy
+        if dist is not None:
+            new_dist = np.array(dist, dtype=np.float64)
+            if len(new_dist.shape) > 1:
+                new_dist = new_dist.flatten()
+            
+            # Preserve original length, fill with zeros if shorter
+            original_length = len(self.dist)
+            if len(new_dist) < original_length:
+                padded_dist = np.zeros(original_length, dtype=np.float64)
+                padded_dist[:len(new_dist)] = new_dist
+                self.dist = padded_dist
+            else:
+                self.dist = new_dist[:original_length]  # Truncate if longer
+        if ret is not None:
+            self.ret = ret
+        if name is not None:
+            self.name = name
+    
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert intrinsics to dictionary format.
@@ -109,12 +170,13 @@ class Intrinsics:
         Create Intrinsics object from dictionary.
         
         :param data: Dictionary containing calibration data
+                    Supports both 'mtx' and 'K' keys for the calibration matrix
         :return: Intrinsics object
         """
         return cls(
-            ret=data['ret'],
-            mtx=np.array(data['mtx']),
+            mtx=np.array(data.get('mtx') or data['K']),
             dist=np.array(data['dist']),
+            ret=data.get('ret'),
             name=data.get('name')
         )
     
@@ -144,8 +206,9 @@ class Intrinsics:
     def __str__(self) -> str:
         """String representation of intrinsics."""
         name_str = f" ({self.name})" if self.name else ""
+        ret_str = f"  RMS Error: {self.ret:.6f}\n" if self.ret is not None else ""
         return (f"Intrinsics{name_str}:\n"
-                f"  RMS Error: {self.ret:.6f}\n"
+                f"{ret_str}"
                 f"  Focal Length: fx={self.fx:.2f}, fy={self.fy:.2f}\n"
                 f"  Principal Point: cx={self.cx:.2f}, cy={self.cy:.2f}\n"
                 f"  Distortion: k1={self.k1:.6f}, k2={self.k2:.6f}, p1={self.p1:.6f}, p2={self.p2:.6f}, k3={self.k3:.6f}")
@@ -178,17 +241,17 @@ class IntrinsicsPair:
         """
         Access intrinsics by key.
         
-        :param key: 'thermal', 'Thermal', 'wide', 'Wide', 'T', or 'W'
+        :param key: 'thermal', 'Thermal', 'wide', 'Wide', 'rgb', 'RGB', 'T', or 'W'
         :return: Corresponding Intrinsics object
         :raises KeyError: If key is not recognized
         """
         key_lower = key.lower()
         if key_lower in ['thermal', 't']:
             return self.thermal
-        elif key_lower in ['wide', 'w']:
+        elif key_lower in ['wide', 'w', 'rgb']:
             return self.wide
         else:
-            raise KeyError(f"Invalid key '{key}'. Use 'thermal'/'T' or 'wide'/'W'")
+            raise KeyError(f"Invalid key '{key}'. Use 'thermal'/'T' or 'wide'/'W'/'rgb'")
     
     def items(self) -> List[tuple]:
         """Return list of (name, intrinsics) tuples."""
@@ -218,10 +281,10 @@ class IntrinsicsPair:
         :return: IntrinsicsPair object
         """
         thermal_data = data.get('Thermal') or data.get('thermal')
-        wide_data = data.get('Wide') or data.get('wide')
+        wide_data = data.get('Wide') or data.get('wide') or data.get('RGB') or data.get('rgb')
         
         if thermal_data is None or wide_data is None:
-            raise ValueError("Dictionary must contain both 'Thermal' and 'Wide' keys")
+            raise ValueError("Dictionary must contain both 'Thermal' and 'Wide'/'RGB' keys")
         
         thermal = Intrinsics.from_dict(thermal_data)
         thermal.name = thermal.name or 'Thermal'
@@ -237,6 +300,7 @@ class IntrinsicsPair:
         
         :param filepath: Path to save the JSON file
         """
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(self.to_dict(), f, indent=2)
     
@@ -253,6 +317,28 @@ class IntrinsicsPair:
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
         return cls.from_dict(data)
+    
+    def copy(self) -> 'IntrinsicsPair':
+        """
+        Create a deep copy of the IntrinsicsPair.
+        
+        :return: New IntrinsicsPair object with copied Intrinsics objects
+        """
+        thermal_copy = Intrinsics(
+            mtx=self.thermal.mtx.copy(),
+            dist=self.thermal.dist.copy(),
+            ret=self.thermal.ret,
+            name=self.thermal.name
+        )
+        
+        wide_copy = Intrinsics(
+            mtx=self.wide.mtx.copy(),
+            dist=self.wide.dist.copy(),
+            ret=self.wide.ret,
+            name=self.wide.name
+        )
+        
+        return IntrinsicsPair(thermal_copy, wide_copy)
     
     def __str__(self) -> str:
         """String representation of intrinsics pair."""
