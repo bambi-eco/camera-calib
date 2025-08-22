@@ -1,0 +1,29 @@
+<?xml version="1.0" ?>
+<annotations>
+   <image id="W2" name="frame_000022.jpg" width="4000" height="3000">
+      <points label="0" occluded="0" source="manual" points="2270.0,1630.0" z_order="0"/>
+      <points label="1" occluded="0" source="manual" points="3107.0,1550.0" z_order="0"/>
+      <points label="2" occluded="0" source="manual" points="1767,1190" z_order="0"/>
+   </image>
+   <image id="T2" name="frame_000022.jpg" width="1280" height="1024">
+      <points label="0" occluded="0" source="manual" points="770.0,570.0" z_order="0"/>
+      <points label="1" occluded="0" source="manual" points="1181.0,520.0" z_order="0"/>
+      <points label="2" occluded="0" source="manual" points="503,339" z_order="0"/>
+   </image>
+   <image id="W4" name="frame_000024.jpg" width="4000" height="3000">
+      <points label="0" occluded="0" source="manual" points="1272,1607" z_order="0"/>
+      <points label="1" occluded="0" source="manual" points="1977,1092" z_order="0"/>
+   </image>
+   <image id="T4" name="frame_000024.jpg" width="1280" height="1024">
+      <points label="0" occluded="0" source="manual" points="263,562" z_order="0"/>
+      <points label="1" occluded="0" source="manual" points="617,287" z_order="0"/>
+   </image>
+   <image id="W5" name="frame_000025.jpg" width="4000" height="3000">
+      <points label="0" occluded="0" source="manual" points="2970,1192" z_order="0"/>
+      <points label="1" occluded="0" source="manual" points="2802,1607" z_order="0"/>
+   </image>
+   <image id="T5" name="frame_000025.jpg" width="1280" height="1024">
+      <points label="0" occluded="0" source="manual" points="1117,346" z_order="0"/>
+      <points label="1" occluded="0" source="manual" points="1045,552" z_order="0"/>
+   </image>
+</annotations>
