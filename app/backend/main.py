@@ -630,6 +630,37 @@ async def download_calibration(project_id: str):
     return FileResponse(path, filename="calibration.json", media_type="application/json")
 
 
+@app.get("/api/projects/{project_id}/download-calibration/{camera}")
+async def download_single_calibration(project_id: str, camera: str):
+    """Download a single camera's calibration as a flat Intrinsics JSON.
+
+    camera: 'thermal' or 'rgb'
+    """
+    path = os.path.join(project_dir(project_id), "results", "calibration.json")
+    if not os.path.isfile(path):
+        raise HTTPException(404, "No calibration result yet")
+
+    try:
+        calib_pair = IntrinsicsPair.load_json(path)
+    except Exception as e:
+        raise HTTPException(500, f"Failed to read calibration: {e}")
+
+    cam_lower = camera.lower()
+    if cam_lower in ("thermal", "t"):
+        intr = calib_pair.thermal
+        filename = "calibration_thermal.json"
+    elif cam_lower in ("rgb", "wide", "w"):
+        intr = calib_pair.wide
+        filename = "calibration_rgb.json"
+    else:
+        raise HTTPException(400, f"Unknown camera '{camera}'. Use 'thermal' or 'rgb'.")
+
+    return JSONResponse(
+        content=intr.to_dict(),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.get("/api/projects/{project_id}/download-annotations")
 async def download_annotations(project_id: str):
     path = os.path.join(project_dir(project_id), "pairs.xml")

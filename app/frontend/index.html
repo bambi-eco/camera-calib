@@ -1333,6 +1333,39 @@ function AnnotateTab({ project, onRefresh }) {
   const [heatmapRows, setHeatmapRows] = useState(8);
   const [heatmapCols, setHeatmapCols] = useState(8);
 
+  // Undo stack — stores previous annotation snapshots (max 50)
+  const undoStackRef = useRef([]);
+  const [undoCount, setUndoCount] = useState(0);
+  const MAX_UNDO = 50;
+
+  const pushUndo = useCallback((prevAnnotations) => {
+    undoStackRef.current.push(JSON.stringify(prevAnnotations));
+    if (undoStackRef.current.length > MAX_UNDO) {
+      undoStackRef.current.shift();
+    }
+    setUndoCount(undoStackRef.current.length);
+  }, []);
+
+  const undo = useCallback(() => {
+    if (undoStackRef.current.length === 0) return;
+    const prev = JSON.parse(undoStackRef.current.pop());
+    setAnnotations(prev);
+    setUndoCount(undoStackRef.current.length);
+    toast('Undo', 'info');
+  }, []);
+
+  // Ctrl+Z keyboard shortcut
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo]);
+
   const pair = pairs[pairIdx] || null;
   const pairId = pair ? String(pair.id) : null;
   const currentPoints = pairId && annotations[pairId] ? annotations[pairId].points || [] : [];
@@ -1350,6 +1383,7 @@ function AnnotateTab({ project, onRefresh }) {
   const handleCanvasClick = useCallback((channel, x, y) => {
     if (!pairId) return;
     setAnnotations(prev => {
+      pushUndo(prev);
       const copy = JSON.parse(JSON.stringify(prev));
       if (!copy[pairId]) copy[pairId] = { points: [] };
       const pts = copy[pairId].points;
@@ -1366,10 +1400,11 @@ function AnnotateTab({ project, onRefresh }) {
       }
       return copy;
     });
-  }, [pairId]);
+  }, [pairId, pushUndo]);
 
   const deletePoint = (idx) => {
     setAnnotations(prev => {
+      pushUndo(prev);
       const copy = JSON.parse(JSON.stringify(prev));
       if (!copy[pairId]) return prev;
       copy[pairId].points.splice(idx, 1);
@@ -1426,6 +1461,15 @@ function AnnotateTab({ project, onRefresh }) {
         <div className="divider" />
         <span className="status-badge ok">{totalPoints} total points</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button
+            className="btn btn-sm"
+            onClick={undo}
+            disabled={undoCount === 0}
+            title="Undo last action (Ctrl+Z)"
+          >
+            ↩ Undo
+          </button>
+          <div className="divider" />
           <button
             className={`btn btn-sm ${showHeatmap ? 'btn-primary' : ''}`}
             onClick={() => setShowHeatmap(h => !h)}
@@ -1989,12 +2033,18 @@ function ResultsTab({ project, onRefresh }) {
               {renderCalibTable(result.optimized_calibration?.Thermal, 'Optimized Thermal Intrinsics')}
               {renderCalibTable(result.optimized_calibration?.Wide, 'Wide / RGB Intrinsics (unchanged)')}
 
-              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
                 <a className="btn btn-success" href={`/api/projects/${project.id}/download-calibration`} target="_blank">
-                  ↓ Download calibration.json
+                  ↓ Both (calibration.json)
+                </a>
+                <a className="btn" href={`/api/projects/${project.id}/download-calibration/thermal`} target="_blank" style={{ borderColor: 'var(--thermal)', color: 'var(--thermal)' }}>
+                  ↓ Thermal only
+                </a>
+                <a className="btn" href={`/api/projects/${project.id}/download-calibration/rgb`} target="_blank" style={{ borderColor: 'var(--rgb-color)', color: 'var(--rgb-color)' }}>
+                  ↓ RGB only
                 </a>
                 <a className="btn" href={`/api/projects/${project.id}/download-annotations`} target="_blank">
-                  ↓ Download pairs.xml
+                  ↓ Annotations (pairs.xml)
                 </a>
               </div>
             </div>
