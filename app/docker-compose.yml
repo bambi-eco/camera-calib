@@ -1,0 +1,16 @@
+services:
+  camera-calib:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - calib-data:/app/data
+      # Uncomment for development to enable live-reload:
+      # - ./backend:/app/backend
+      # - ./frontend:/app/frontend
+    environment:
+      - DATA_ROOT=/app/data
+      - FRONTEND_DIR=/app/frontend
+
+volumes:
+  calib-data:

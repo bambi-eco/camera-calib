@@ -1,0 +1,2027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Camera Calibration Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0e1117;
+  --bg-card: #161b22;
+  --bg-elevated: #1c2129;
+  --bg-hover: #21262d;
+  --border: #30363d;
+  --border-active: #58a6ff;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --text-dim: #6e7681;
+  --accent: #58a6ff;
+  --accent-hover: #79b8ff;
+  --thermal: #ff6b35;
+  --thermal-dim: #ff6b3544;
+  --rgb-color: #58a6ff;
+  --rgb-dim: #58a6ff44;
+  --success: #3fb950;
+  --warning: #d29922;
+  --danger: #f85149;
+  --font-sans: 'IBM Plex Sans', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* Layout */
+.app { display: flex; height: 100vh; }
+
+.sidebar {
+  width: 280px;
+  min-width: 280px;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-header .logo {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.5px;
+  color: var(--accent);
+}
+
+.sidebar-header .logo-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.sidebar-section {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-section h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.project-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.project-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.project-item:hover { background: var(--bg-hover); }
+.project-item.active { background: var(--accent); color: #000; font-weight: 600; }
+.project-item.active .project-pairs { color: #000a; }
+
+.project-pairs {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+.project-item .delete-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: opacity 0.15s;
+}
+
+.project-item:hover .delete-btn { opacity: 1; }
+.project-item.active .delete-btn { color: #600; }
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.btn:hover { background: var(--bg-hover); border-color: var(--text-dim); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.btn-primary:hover { background: var(--accent-hover); }
+
+.btn-success {
+  background: var(--success);
+  color: #000;
+  border-color: var(--success);
+  font-weight: 600;
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-block { width: 100%; justify-content: center; }
+
+/* Main area */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  min-height: 48px;
+  flex-wrap: wrap;
+}
+
+.toolbar .divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+.content {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+/* Tab bar */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  font-family: var(--font-sans);
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.tab:hover { color: var(--text); background: var(--bg-hover); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 40px;
+}
+
+.empty-state .icon {
+  font-size: 48px;
+  opacity: 0.3;
+}
+
+.empty-state h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.empty-state p {
+  font-size: 14px;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+/* Upload area */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin: 16px;
+  background: var(--bg-elevated);
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--accent);
+  background: #58a6ff0a;
+}
+
+.upload-zone h3 { font-size: 15px; margin-bottom: 6px; }
+.upload-zone p { font-size: 13px; color: var(--text-muted); }
+
+.upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+}
+
+.upload-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.upload-card h3 {
+  font-size: 14px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-card h3 .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.upload-card h3 .dot.rgb { background: var(--rgb-color); }
+.upload-card h3 .dot.thermal { background: var(--thermal); }
+
+.upload-card p {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.file-list {
+  max-height: 120px;
+  overflow-y: auto;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.file-list div {
+  padding: 2px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Mode selector */
+.mode-selector {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.mode-option {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+}
+
+.mode-option:hover { color: var(--text); background: var(--bg-hover); }
+.mode-option.active { background: var(--accent); color: #000; font-weight: 600; }
+
+/* Annotation canvas area */
+.anno-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  height: 100%;
+  background: var(--border);
+}
+
+.anno-panel {
+  background: var(--bg);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.anno-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 32px;
+}
+
+.anno-panel-header .channel-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.anno-panel-header .channel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.anno-panel-header .dims {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.canvas-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+.canvas-wrap canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.canvas-wrap.awaiting-click {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* Point list */
+.point-list {
+  padding: 8px 16px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.point-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  border-bottom: 1px solid var(--border);
+}
+
+.point-row:last-child { border-bottom: none; }
+
+.point-label {
+  font-weight: 600;
+  min-width: 24px;
+  text-align: center;
+  background: var(--bg-elevated);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.point-coord {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.point-coord.rgb { color: var(--rgb-color); }
+.point-coord.thermal { color: var(--thermal); }
+
+.point-delete {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 13px;
+  opacity: 0.5;
+  padding: 0 4px;
+}
+
+.point-delete:hover { opacity: 1; }
+
+/* Pair navigator */
+.pair-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pair-nav .pair-label {
+  font-size: 13px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  min-width: 80px;
+  text-align: center;
+}
+
+/* Results */
+.results-grid {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.result-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.result-card h3 {
+  font-size: 14px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.result-metric {
+  display: inline-flex;
+  flex-direction: column;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 20px;
+  margin-right: 12px;
+  margin-bottom: 8px;
+}
+
+.result-metric .value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.result-metric .label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.calib-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.calib-table th {
+  text-align: left;
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.calib-table td {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.overlay-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.overlay-gallery img {
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+/* Calibration input form */
+.calib-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+}
+
+.calib-form-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+
+.calib-form-section h3 {
+  font-size: 13px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.form-row label {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.form-row input {
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.form-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  z-index: 999;
+  animation: slideIn 0.3s ease;
+  max-width: 400px;
+}
+
+.toast.success { border-color: var(--success); }
+.toast.error { border-color: var(--danger); }
+
+@keyframes slideIn {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Loading spinner */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* Initial calib upload card */
+.calib-upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.calib-upload-zone:hover {
+  border-color: var(--accent);
+  background: #58a6ff08;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-badge.ok { background: #3fb95022; color: var(--success); }
+.status-badge.warn { background: #d2992222; color: var(--warning); }
+.status-badge.err { background: #f8514922; color: var(--danger); }
+
+/* Heatmap panel */
+.heatmap-overlay {
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  padding: 0;
+  animation: heatmapSlideIn 0.25s ease;
+}
+
+@keyframes heatmapSlideIn {
+  from { max-height: 0; opacity: 0; }
+  to   { max-height: 600px; opacity: 1; }
+}
+
+.heatmap-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.heatmap-toolbar label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.heatmap-toolbar input[type="range"] {
+  width: 80px;
+  accent-color: var(--accent);
+}
+
+.heatmap-toolbar .range-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 20px;
+  color: var(--accent);
+}
+
+.heatmap-grid-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  background: var(--border);
+}
+
+.heatmap-cell {
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+}
+
+.heatmap-cell h4 {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.heatmap-canvas-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.heatmap-canvas-wrap canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.heatmap-gradient {
+  width: 100px;
+  height: 10px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.2/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+const API = '';
+
+// ─── Utility ───
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(`${API}${path}`, opts);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+  return res.json();
+}
+
+// ─── App ───
+function App() {
+  const [projects, setProjects] = useState([]);
+  const [activeProject, setActiveProject] = useState(null);
+  const [tab, setTab] = useState('upload'); // upload | annotate | calibrate | results
+
+  const loadProjects = useCallback(async () => {
+    try {
+      const data = await api('/api/projects');
+      setProjects(data);
+    } catch (e) { console.error(e); }
+  }, []);
+
+  useEffect(() => { loadProjects(); }, [loadProjects]);
+
+  const createProject = async () => {
+    const name = prompt('Project name:', `Calibration ${projects.length + 1}`);
+    if (!name) return;
+    const fd = new FormData();
+    fd.append('name', name);
+    const proj = await api('/api/projects', { method: 'POST', body: fd });
+    await loadProjects();
+    setActiveProject(proj);
+    setTab('upload');
+  };
+
+  const deleteProject = async (e, pid) => {
+    e.stopPropagation();
+    if (!confirm('Delete this project?')) return;
+    await api(`/api/projects/${pid}`, { method: 'DELETE' });
+    if (activeProject?.id === pid) setActiveProject(null);
+    await loadProjects();
+  };
+
+  const selectProject = async (proj) => {
+    const full = await api(`/api/projects/${proj.id}`);
+    setActiveProject(full);
+  };
+
+  const refreshProject = async () => {
+    if (!activeProject) return;
+    const full = await api(`/api/projects/${activeProject.id}`);
+    setActiveProject(full);
+  };
+
+  return (
+    <div className="app">
+      <div className="sidebar">
+        <div className="sidebar-header">
+          <div>
+            <div className="logo">CAM·CALIB</div>
+            <div className="logo-sub">Thermal / RGB Alignment</div>
+          </div>
+        </div>
+
+        <div className="sidebar-section">
+          <button className="btn btn-primary btn-block" onClick={createProject}>
+            + New Project
+          </button>
+        </div>
+
+        <div className="project-list">
+          <div className="sidebar-section" style={{ border: 'none', padding: '4px 0' }}>
+            <h3>Projects</h3>
+          </div>
+          {projects.map(p => (
+            <div
+              key={p.id}
+              className={`project-item ${activeProject?.id === p.id ? 'active' : ''}`}
+              onClick={() => selectProject(p)}
+            >
+              <span>{p.name}</span>
+              <span className="project-pairs">{(p.pairs || []).length}pr</span>
+              <button className="delete-btn" onClick={(e) => deleteProject(e, p.id)}>✕</button>
+            </div>
+          ))}
+          {projects.length === 0 && (
+            <div style={{ padding: '12px', fontSize: 12, color: 'var(--text-dim)', textAlign: 'center' }}>
+              No projects yet
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="main">
+        {activeProject ? (
+          <>
+            <div className="tab-bar">
+              <button className={`tab ${tab === 'upload' ? 'active' : ''}`} onClick={() => setTab('upload')}>
+                ① Upload
+              </button>
+              <button className={`tab ${tab === 'calibration-input' ? 'active' : ''}`} onClick={() => setTab('calibration-input')}>
+                ② Initial Calib <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 400 }}>(optional)</span>
+              </button>
+              <button className={`tab ${tab === 'annotate' ? 'active' : ''}`} onClick={() => setTab('annotate')}>
+                ③ Annotate
+              </button>
+              <button className={`tab ${tab === 'results' ? 'active' : ''}`} onClick={() => setTab('results')}>
+                ④ Results
+              </button>
+            </div>
+            {tab === 'upload' && (
+              <UploadTab project={activeProject} onRefresh={refreshProject} />
+            )}
+            {tab === 'calibration-input' && (
+              <CalibrationInputTab project={activeProject} onRefresh={refreshProject} />
+            )}
+            {tab === 'annotate' && (
+              <AnnotateTab project={activeProject} onRefresh={refreshProject} />
+            )}
+            {tab === 'results' && (
+              <ResultsTab project={activeProject} onRefresh={refreshProject} />
+            )}
+          </>
+        ) : (
+          <div className="empty-state">
+            <div className="icon">⊞</div>
+            <h2>Select or create a project</h2>
+            <p>Create a new calibration project to start uploading RGB and thermal image/video pairs for keypoint annotation and camera calibration.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Upload Tab ───
+function UploadTab({ project, onRefresh }) {
+  const [mode, setMode] = useState('images'); // images | videos
+  const [uploading, setUploading] = useState(false);
+  const [rgbFiles, setRgbFiles] = useState([]);
+  const [thermalFiles, setThermalFiles] = useState([]);
+
+  const pairs = project.pairs || [];
+
+  const uploadImages = async (channel, files) => {
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('channel', channel);
+      for (const f of files) fd.append('files', f);
+      await api(`/api/projects/${project.id}/upload-images`, { method: 'POST', body: fd });
+      toast(`Uploaded ${files.length} ${channel} images`, 'success');
+      await onRefresh();
+    } catch (e) {
+      toast(`Upload failed: ${e.message}`, 'error');
+    }
+    setUploading(false);
+  };
+
+  const uploadVideo = async (channel, file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('channel', channel);
+      fd.append('file', file);
+      const res = await api(`/api/projects/${project.id}/upload-video`, { method: 'POST', body: fd });
+      toast(`Extracted frame from ${channel} video: ${res.extracted_frame}`, 'success');
+      await onRefresh();
+    } catch (e) {
+      toast(`Video upload failed: ${e.message}`, 'error');
+    }
+    setUploading(false);
+  };
+
+  const uploadVideoPair = async (rgbFile, thermalFile) => {
+    if (!rgbFile || !thermalFile) {
+      toast('Please select both RGB and thermal videos', 'error');
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('rgb_file', rgbFile);
+      fd.append('thermal_file', thermalFile);
+      const res = await api(`/api/projects/${project.id}/upload-video-pair`, { method: 'POST', body: fd });
+      toast(`Extracted frames: RGB=${res.rgb}, Thermal=${res.thermal}`, 'success');
+      setRgbFiles([]);
+      setThermalFiles([]);
+      await onRefresh();
+    } catch (e) {
+      toast(`Video pair upload failed: ${e.message}`, 'error');
+    }
+    setUploading(false);
+  };
+
+  return (
+    <div className="content" style={{ overflow: 'auto' }}>
+      <div style={{ padding: 16 }}>
+        <div className="mode-selector">
+          <button className={`mode-option ${mode === 'images' ? 'active' : ''}`} onClick={() => setMode('images')}>
+            📷 Image Pairs
+          </button>
+          <button className={`mode-option ${mode === 'videos' ? 'active' : ''}`} onClick={() => setMode('videos')}>
+            🎬 Video Pairs (extract frame)
+          </button>
+        </div>
+      </div>
+
+      {mode === 'images' ? (
+        <div className="upload-grid">
+          <UploadCard
+            channel="rgb"
+            label="RGB Images"
+            dotClass="rgb"
+            accept="image/*"
+            multiple
+            onFiles={(files) => uploadImages('rgb', files)}
+            disabled={uploading}
+            description="Upload RGB camera images (.jpg, .png)"
+          />
+          <UploadCard
+            channel="thermal"
+            label="Thermal Images"
+            dotClass="thermal"
+            accept="image/*"
+            multiple
+            onFiles={(files) => uploadImages('thermal', files)}
+            disabled={uploading}
+            description="Upload thermal camera images (.jpg, .png)"
+          />
+        </div>
+      ) : (
+        <div className="upload-grid">
+          <UploadCard
+            channel="rgb"
+            label="RGB Video"
+            dotClass="rgb"
+            accept="video/*"
+            onFiles={(files) => { setRgbFiles(Array.from(files)); }}
+            disabled={uploading}
+            description="Select RGB video file — central frame will be extracted"
+            selectedFiles={rgbFiles}
+          />
+          <UploadCard
+            channel="thermal"
+            label="Thermal Video"
+            dotClass="thermal"
+            accept="video/*"
+            onFiles={(files) => { setThermalFiles(Array.from(files)); }}
+            disabled={uploading}
+            description="Select thermal video file — central frame will be extracted"
+            selectedFiles={thermalFiles}
+          />
+          <div style={{ gridColumn: '1 / -1', padding: '0 0 16px' }}>
+            <button
+              className="btn btn-primary btn-block"
+              disabled={uploading || rgbFiles.length === 0 || thermalFiles.length === 0}
+              onClick={() => uploadVideoPair(rgbFiles[0], thermalFiles[0])}
+            >
+              {uploading ? <><span className="spinner" /> Extracting frames...</> : 'Extract & Upload Pair'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pairs.length > 0 && (
+        <div style={{ padding: 16 }}>
+          <h3 style={{ fontSize: 14, marginBottom: 8 }}>Paired Images ({pairs.length})</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+            {pairs.map(p => (
+              <div key={p.id} style={{
+                display: 'flex', gap: 8, background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', padding: 8, alignItems: 'center'
+              }}>
+                <img
+                  src={`/api/projects/${project.id}/image/rgb/${p.rgb}`}
+                  style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 4 }}
+                  alt=""
+                />
+                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                  <div style={{ color: 'var(--rgb-color)' }}>RGB: {p.rgb}</div>
+                  <div style={{ color: 'var(--thermal)' }}>TH: {p.thermal}</div>
+                </div>
+                <img
+                  src={`/api/projects/${project.id}/image/thermal/${p.thermal}`}
+                  style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 4, marginLeft: 'auto' }}
+                  alt=""
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UploadCard({ channel, label, dotClass, accept, multiple, onFiles, disabled, description, selectedFiles }) {
+  const inputRef = useRef(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files.length > 0) {
+      onFiles(Array.from(e.dataTransfer.files));
+    }
+  };
+
+  return (
+    <div className="upload-card">
+      <h3><span className={`dot ${dotClass}`} /> {label}</h3>
+      <p>{description}</p>
+
+      <div
+        className={`upload-zone ${dragOver ? 'drag-over' : ''}`}
+        style={{ margin: 0, padding: 20 }}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
+        <p>Click or drag files here</p>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={accept}
+          multiple={multiple}
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            if (e.target.files.length) onFiles(Array.from(e.target.files));
+            e.target.value = '';
+          }}
+        />
+      </div>
+
+      {selectedFiles && selectedFiles.length > 0 && (
+        <div className="file-list">
+          {selectedFiles.map((f, i) => <div key={i}>✓ {f.name}</div>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Calibration Input Tab ───
+function CalibrationInputTab({ project, onRefresh }) {
+  const [calib, setCalib] = useState(null);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    if (project.initial_calibration) {
+      setCalib(project.initial_calibration);
+    }
+  }, [project]);
+
+  const handleUploadJSON = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      await api(`/api/projects/${project.id}/initial-calibration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      setCalib(data);
+      toast('Initial calibration loaded', 'success');
+      await onRefresh();
+    } catch (e) {
+      toast(`Failed to load calibration: ${e.message}`, 'error');
+    }
+  };
+
+  const saveCalib = async () => {
+    try {
+      await api(`/api/projects/${project.id}/initial-calibration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(calib),
+      });
+      toast('Calibration saved', 'success');
+      await onRefresh();
+    } catch (e) {
+      toast(`Save failed: ${e.message}`, 'error');
+    }
+  };
+
+  const updateValue = (camera, field, value) => {
+    setCalib(prev => {
+      const c = JSON.parse(JSON.stringify(prev));
+      const cam = camera === 'rgb' ? (c.RGB || c.Wide || c.wide) : (c.Thermal || c.thermal);
+      if (!cam) return prev;
+      const K = cam.K || cam.mtx;
+      const dist = cam.dist;
+
+      if (field === 'fx') K[0][0] = parseFloat(value) || 0;
+      else if (field === 'fy') K[1][1] = parseFloat(value) || 0;
+      else if (field === 'cx') K[0][2] = parseFloat(value) || 0;
+      else if (field === 'cy') K[1][2] = parseFloat(value) || 0;
+      else if (field.startsWith('d')) {
+        const idx = parseInt(field[1]);
+        const d = Array.isArray(dist[0]) ? dist[0] : dist;
+        d[idx] = parseFloat(value) || 0;
+      }
+      return c;
+    });
+  };
+
+  const getValues = (camera) => {
+    if (!calib) return null;
+    const cam = camera === 'rgb'
+      ? (calib.RGB || calib.Wide || calib.wide)
+      : (calib.Thermal || calib.thermal);
+    if (!cam) return null;
+    const K = cam.K || cam.mtx;
+    const dist = Array.isArray((cam.dist || [])[0]) ? cam.dist[0] : (cam.dist || []);
+    return {
+      fx: K[0][0], fy: K[1][1], cx: K[0][2], cy: K[1][2],
+      d0: dist[0] || 0, d1: dist[1] || 0, d2: dist[2] || 0, d3: dist[3] || 0, d4: dist[4] || 0,
+    };
+  };
+
+  return (
+    <div className="content" style={{ overflow: 'auto' }}>
+      <div style={{ padding: 16 }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <div
+            className="calib-upload-zone"
+            style={{ flex: 1 }}
+            onClick={() => fileRef.current?.click()}
+          >
+            📂 Load calibration JSON file
+            <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleUploadJSON} />
+          </div>
+          {calib && (
+            <button className="btn btn-success" onClick={saveCalib}>
+              💾 Save Changes
+            </button>
+          )}
+        </div>
+
+        {!calib && (
+          <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 20, textAlign: 'center' }}>
+            <strong style={{ color: 'var(--text)' }}>Optional.</strong> Upload an initial_calibration.json with Thermal and RGB/Wide camera matrices and distortion coefficients for best results. If skipped, intrinsics will be auto-estimated from image dimensions.
+          </div>
+        )}
+      </div>
+
+      {calib && (
+        <div className="calib-form">
+          {[['rgb', 'RGB / Wide Camera', 'rgb'], ['thermal', 'Thermal Camera', 'thermal']].map(([key, label, dot]) => {
+            const vals = getValues(key);
+            if (!vals) return null;
+            return (
+              <div key={key} className="calib-form-section">
+                <h3><span className={`dot ${dot}`} style={{ width: 10, height: 10, borderRadius: '50%', background: dot === 'rgb' ? 'var(--rgb-color)' : 'var(--thermal)', display: 'inline-block' }} /> {label}</h3>
+                <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 12, fontFamily: 'var(--font-mono)' }}>
+                  Intrinsic Matrix (K)
+                </div>
+                {['fx', 'fy', 'cx', 'cy'].map(f => (
+                  <div className="form-row" key={f}>
+                    <label>{f}</label>
+                    <input type="number" step="any" value={vals[f]} onChange={e => updateValue(key, f, e.target.value)} />
+                  </div>
+                ))}
+                <div style={{ fontSize: 11, color: 'var(--text-dim)', margin: '12px 0 8px', fontFamily: 'var(--font-mono)' }}>
+                  Distortion (k1, k2, p1, p2, k3)
+                </div>
+                {['d0', 'd1', 'd2', 'd3', 'd4'].map((f, i) => (
+                  <div className="form-row" key={f}>
+                    <label>{['k1', 'k2', 'p1', 'p2', 'k3'][i]}</label>
+                    <input type="number" step="any" value={vals[f]} onChange={e => updateValue(key, f, e.target.value)} />
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Annotate Tab ───
+function AnnotateTab({ project, onRefresh }) {
+  const pairs = project.pairs || [];
+  const [pairIdx, setPairIdx] = useState(0);
+  const [annotations, setAnnotations] = useState(project.annotations || {});
+  const [clickTarget, setClickTarget] = useState(null); // null | 'rgb' | 'thermal'
+  const [saving, setSaving] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [heatmapRows, setHeatmapRows] = useState(8);
+  const [heatmapCols, setHeatmapCols] = useState(8);
+
+  const pair = pairs[pairIdx] || null;
+  const pairId = pair ? String(pair.id) : null;
+  const currentPoints = pairId && annotations[pairId] ? annotations[pairId].points || [] : [];
+
+  // Determine what click is expected next
+  const pendingChannel = useMemo(() => {
+    if (clickTarget) return clickTarget;
+    // Auto-determine: if last point has rgb but not thermal, expect thermal
+    if (currentPoints.length === 0) return 'rgb';
+    const last = currentPoints[currentPoints.length - 1];
+    if (last && last.rgb && !last.thermal) return 'thermal';
+    return 'rgb';
+  }, [currentPoints, clickTarget]);
+
+  const handleCanvasClick = useCallback((channel, x, y) => {
+    if (!pairId) return;
+    setAnnotations(prev => {
+      const copy = JSON.parse(JSON.stringify(prev));
+      if (!copy[pairId]) copy[pairId] = { points: [] };
+      const pts = copy[pairId].points;
+
+      if (channel === 'rgb') {
+        // Start a new point pair
+        pts.push({ label: String(pts.length), rgb: [Math.round(x), Math.round(y)], thermal: null });
+      } else {
+        // Find the last point missing thermal
+        const pending = pts.findLast(p => p.rgb && !p.thermal);
+        if (pending) {
+          pending.thermal = [Math.round(x), Math.round(y)];
+        }
+      }
+      return copy;
+    });
+  }, [pairId]);
+
+  const deletePoint = (idx) => {
+    setAnnotations(prev => {
+      const copy = JSON.parse(JSON.stringify(prev));
+      if (!copy[pairId]) return prev;
+      copy[pairId].points.splice(idx, 1);
+      // Re-label
+      copy[pairId].points.forEach((p, i) => p.label = String(i));
+      return copy;
+    });
+  };
+
+  const saveAnnotations = async () => {
+    setSaving(true);
+    try {
+      await api(`/api/projects/${project.id}/annotations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ annotations }),
+      });
+      toast('Annotations saved', 'success');
+      await onRefresh();
+    } catch (e) {
+      toast(`Save failed: ${e.message}`, 'error');
+    }
+    setSaving(false);
+  };
+
+  const totalPoints = Object.values(annotations).reduce(
+    (sum, a) => sum + (a.points || []).filter(p => p.rgb && p.thermal).length, 0
+  );
+
+  if (pairs.length === 0) {
+    return (
+      <div className="empty-state">
+        <div className="icon">📷</div>
+        <h2>No image pairs</h2>
+        <p>Upload RGB and thermal images first in the Upload tab.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="main" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="toolbar">
+        <div className="pair-nav">
+          <button className="btn btn-sm" disabled={pairIdx <= 0} onClick={() => setPairIdx(i => i - 1)}>◀</button>
+          <span className="pair-label">Pair {pairIdx + 1}/{pairs.length}</span>
+          <button className="btn btn-sm" disabled={pairIdx >= pairs.length - 1} onClick={() => setPairIdx(i => i + 1)}>▶</button>
+        </div>
+        <div className="divider" />
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          Click: <strong style={{ color: pendingChannel === 'rgb' ? 'var(--rgb-color)' : 'var(--thermal)' }}>
+            {pendingChannel === 'rgb' ? 'RGB' : 'Thermal'}
+          </strong> image to place point #{currentPoints.length + (pendingChannel === 'thermal' ? 0 : 1) - (pendingChannel === 'thermal' ? 0 : 0)}
+        </span>
+        <div className="divider" />
+        <span className="status-badge ok">{totalPoints} total points</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button
+            className={`btn btn-sm ${showHeatmap ? 'btn-primary' : ''}`}
+            onClick={() => setShowHeatmap(h => !h)}
+            title="Toggle point-distribution heatmap"
+          >
+            🗺 Heatmap
+          </button>
+          <button className="btn btn-sm" onClick={saveAnnotations} disabled={saving}>
+            {saving ? <span className="spinner" /> : '💾'} Save
+          </button>
+          <a className="btn btn-sm" href={`/api/projects/${project.id}/download-annotations`} target="_blank">
+            ↓ XML
+          </a>
+        </div>
+      </div>
+
+      <div className="anno-container" style={{ flex: 1 }}>
+        {pair && ['rgb', 'thermal'].map(channel => (
+          <AnnotationPanel
+            key={`${pair.id}-${channel}`}
+            projectId={project.id}
+            pair={pair}
+            channel={channel}
+            points={currentPoints}
+            isActive={pendingChannel === channel}
+            onClick={(x, y) => {
+              if (pendingChannel === channel) handleCanvasClick(channel, x, y);
+            }}
+          />
+        ))}
+      </div>
+
+      {showHeatmap && (
+        <HeatmapPanel
+          projectId={project.id}
+          annotations={annotations}
+          rows={heatmapRows}
+          cols={heatmapCols}
+          onRowsChange={setHeatmapRows}
+          onColsChange={setHeatmapCols}
+        />
+      )}
+
+      {currentPoints.length > 0 && (
+        <div className="point-list">
+          {currentPoints.map((pt, idx) => (
+            <div className="point-row" key={idx}>
+              <span className="point-label">{pt.label}</span>
+              <span className="point-coord rgb">
+                RGB: {pt.rgb ? `(${pt.rgb[0]}, ${pt.rgb[1]})` : '—'}
+              </span>
+              <span className="point-coord thermal">
+                TH: {pt.thermal ? `(${pt.thermal[0]}, ${pt.thermal[1]})` : '—'}
+              </span>
+              <button className="point-delete" onClick={() => deletePoint(idx)}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Heatmap Panel ───
+function HeatmapPanel({ projectId, annotations, rows, cols, onRowsChange, onColsChange }) {
+  const [heatData, setHeatData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const rgbCanvasRef = useRef(null);
+  const thermalCanvasRef = useRef(null);
+
+  // Fetch heatmap whenever annotations, rows, or cols change
+  useEffect(() => {
+    let cancelled = false;
+    const fetchHeatmap = async () => {
+      setLoading(true);
+      try {
+        const data = await api(`/api/projects/${projectId}/point-heatmap?rows=${rows}&cols=${cols}`);
+        if (!cancelled) setHeatData(data);
+      } catch (e) {
+        console.error('Heatmap fetch failed:', e);
+      }
+      if (!cancelled) setLoading(false);
+    };
+    fetchHeatmap();
+    return () => { cancelled = true; };
+  }, [projectId, annotations, rows, cols]);
+
+  // Draw heatmap on canvas
+  const drawHeatmap = useCallback((canvasEl, channel) => {
+    if (!canvasEl || !heatData) return;
+    const channelData = heatData[channel];
+    if (!channelData) return;
+    const { grid, max: maxVal } = channelData;
+    const normPoints = heatData[`points_${channel}`] || [];
+    const R = heatData.rows;
+    const C = heatData.cols;
+
+    const rect = canvasEl.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvasEl.width = rect.width * dpr;
+    canvasEl.height = rect.height * dpr;
+    canvasEl.style.width = rect.width + 'px';
+    canvasEl.style.height = rect.height + 'px';
+    const ctx = canvasEl.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const W = rect.width;
+    const H = rect.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const cellW = W / C;
+    const cellH = H / R;
+    const isRgb = channel === 'rgb';
+
+    // Draw grid cells
+    for (let r = 0; r < R; r++) {
+      for (let c = 0; c < C; c++) {
+        const v = grid[r][c];
+        const t = maxVal > 0 ? v / maxVal : 0;
+        if (isRgb) {
+          // Blue heatmap: transparent→deep blue
+          ctx.fillStyle = `rgba(88, 166, 255, ${t * 0.75})`;
+        } else {
+          // Orange heatmap: transparent→deep orange
+          ctx.fillStyle = `rgba(255, 107, 53, ${t * 0.75})`;
+        }
+        ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
+
+        // Cell count label
+        if (v > 0) {
+          ctx.fillStyle = t > 0.5 ? '#fff' : 'rgba(255,255,255,0.7)';
+          ctx.font = `bold ${Math.max(10, Math.min(cellW, cellH) * 0.35)}px "JetBrains Mono", monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(v), c * cellW + cellW / 2, r * cellH + cellH / 2);
+        }
+      }
+    }
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    for (let r = 0; r <= R; r++) {
+      ctx.beginPath();
+      ctx.moveTo(0, r * cellH);
+      ctx.lineTo(W, r * cellH);
+      ctx.stroke();
+    }
+    for (let c = 0; c <= C; c++) {
+      ctx.beginPath();
+      ctx.moveTo(c * cellW, 0);
+      ctx.lineTo(c * cellW, H);
+      ctx.stroke();
+    }
+
+    // Draw individual points
+    const dotR = Math.max(2, Math.min(cellW, cellH) * 0.08);
+    ctx.fillStyle = isRgb ? '#58a6ff' : '#ff6b35';
+    for (const [nx, ny] of normPoints) {
+      ctx.beginPath();
+      ctx.arc(nx * W, ny * H, dotR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Border
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0, 0, W, H);
+  }, [heatData]);
+
+  // Redraw on data change
+  useEffect(() => {
+    if (!heatData) return;
+    drawHeatmap(rgbCanvasRef.current, 'rgb');
+    drawHeatmap(thermalCanvasRef.current, 'thermal');
+  }, [heatData, drawHeatmap]);
+
+  // Redraw on resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (!heatData) return;
+      drawHeatmap(rgbCanvasRef.current, 'rgb');
+      drawHeatmap(thermalCanvasRef.current, 'thermal');
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [heatData, drawHeatmap]);
+
+  const rgbTotal = heatData?.rgb?.total ?? 0;
+  const thTotal = heatData?.thermal?.total ?? 0;
+  const rgbMax = heatData?.rgb?.max ?? 0;
+  const thMax = heatData?.thermal?.max ?? 0;
+
+  // Compute coverage %: cells with at least 1 point
+  const coveragePct = (channelData) => {
+    if (!channelData) return 0;
+    const { grid } = channelData;
+    const total = grid.length * (grid[0]?.length || 0);
+    const filled = grid.flat().filter(v => v > 0).length;
+    return total > 0 ? Math.round(filled / total * 100) : 0;
+  };
+
+  return (
+    <div className="heatmap-overlay">
+      <div className="heatmap-toolbar">
+        <span style={{ fontWeight: 600, fontSize: 13 }}>🗺 Point Distribution</span>
+        <div className="divider" />
+        <label>Rows</label>
+        <input type="range" min="2" max="24" value={rows} onChange={e => onRowsChange(Number(e.target.value))} />
+        <span className="range-val">{rows}</span>
+        <label>Cols</label>
+        <input type="range" min="2" max="24" value={cols} onChange={e => onColsChange(Number(e.target.value))} />
+        <span className="range-val">{cols}</span>
+        <div className="divider" />
+        {loading && <span className="spinner" />}
+        {heatData && !loading && (
+          <>
+            <span style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+              RGB: {rgbTotal}pts · {coveragePct(heatData.rgb)}% coverage
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+              TH: {thTotal}pts · {coveragePct(heatData.thermal)}% coverage
+            </span>
+          </>
+        )}
+      </div>
+
+      <div className="heatmap-grid-container">
+        {[
+          { key: 'rgb', label: 'RGB', ref: rgbCanvasRef, dot: 'var(--rgb-color)', total: rgbTotal, max: rgbMax },
+          { key: 'thermal', label: 'Thermal', ref: thermalCanvasRef, dot: 'var(--thermal)', total: thTotal, max: thMax },
+        ].map(({ key, label, ref, dot, total, max }) => (
+          <div className="heatmap-cell" key={key}>
+            <h4>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot, display: 'inline-block' }} />
+              {label}
+              <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+                {total} points · peak {max}/cell
+              </span>
+            </h4>
+            <div className="heatmap-canvas-wrap">
+              <canvas ref={ref} />
+            </div>
+            <div className="heatmap-legend">
+              <span>0</span>
+              <canvas
+                className="heatmap-gradient"
+                ref={el => {
+                  if (!el) return;
+                  const c = el.getContext('2d');
+                  el.width = 100; el.height = 10;
+                  const grad = c.createLinearGradient(0, 0, 100, 0);
+                  if (key === 'rgb') {
+                    grad.addColorStop(0, 'rgba(88,166,255,0)');
+                    grad.addColorStop(1, 'rgba(88,166,255,0.85)');
+                  } else {
+                    grad.addColorStop(0, 'rgba(255,107,53,0)');
+                    grad.addColorStop(1, 'rgba(255,107,53,0.85)');
+                  }
+                  c.fillStyle = grad;
+                  c.fillRect(0, 0, 100, 10);
+                }}
+              />
+              <span>{max}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Annotation Panel (single image canvas with zoom/pan) ───
+function AnnotationPanel({ projectId, pair, channel, points, isActive, onClick }) {
+  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+  const imgRef = useRef(null);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgDims, setImgDims] = useState(null);
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const dragRef = useRef({ dragging: false, startX: 0, startY: 0, startTx: 0, startTy: 0 });
+
+  const filename = channel === 'rgb' ? pair.rgb : pair.thermal;
+  const imgUrl = `/api/projects/${projectId}/image/${channel}/${filename}`;
+
+  // Load image
+  useEffect(() => {
+    setImgLoaded(false);
+    const img = new Image();
+    img.onload = () => {
+      imgRef.current = img;
+      setImgDims({ w: img.naturalWidth, h: img.naturalHeight });
+      setImgLoaded(true);
+    };
+    img.src = imgUrl;
+  }, [imgUrl]);
+
+  // Fit image to container on load
+  useEffect(() => {
+    if (!imgLoaded || !containerRef.current || !imgDims) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const scaleX = rect.width / imgDims.w;
+    const scaleY = rect.height / imgDims.h;
+    const scale = Math.min(scaleX, scaleY) * 0.95;
+    const x = (rect.width - imgDims.w * scale) / 2;
+    const y = (rect.height - imgDims.h * scale) / 2;
+    setTransform({ x, y, scale });
+  }, [imgLoaded, imgDims]);
+
+  // Draw
+  useEffect(() => {
+    if (!canvasRef.current || !containerRef.current) return;
+    const canvas = canvasRef.current;
+    const rect = containerRef.current.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!imgRef.current || !imgLoaded) return;
+
+    const { x, y, scale } = transform;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.drawImage(imgRef.current, 0, 0);
+
+    // Draw points
+    const coordKey = channel;
+    points.forEach((pt, idx) => {
+      const coord = pt[coordKey];
+      if (!coord) return;
+      const [px, py] = coord;
+
+      const r = Math.max(4, 6 / scale);
+      const lineW = Math.max(1, 2 / scale);
+      const fontSize = Math.max(10, 14 / scale);
+
+      ctx.strokeStyle = channel === 'rgb' ? '#58a6ff' : '#ff6b35';
+      ctx.fillStyle = channel === 'rgb' ? '#58a6ff' : '#ff6b35';
+      ctx.lineWidth = lineW;
+
+      // Crosshair
+      ctx.beginPath();
+      ctx.moveTo(px - r * 2, py);
+      ctx.lineTo(px + r * 2, py);
+      ctx.moveTo(px, py - r * 2);
+      ctx.lineTo(px, py + r * 2);
+      ctx.stroke();
+
+      // Circle
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Label
+      ctx.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = Math.max(2, 3 / scale);
+      ctx.strokeText(pt.label, px + r * 1.5, py - r);
+      ctx.fillStyle = channel === 'rgb' ? '#58a6ff' : '#ff6b35';
+      ctx.fillText(pt.label, px + r * 1.5, py - r);
+    });
+
+    ctx.restore();
+  }, [transform, points, imgLoaded, channel]);
+
+  // Canvas click → image coordinates
+  const handleClick = (e) => {
+    if (dragRef.current.didDrag) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const imgX = (cx - transform.x) / transform.scale;
+    const imgY = (cy - transform.y) / transform.scale;
+    if (imgX >= 0 && imgY >= 0 && imgDims && imgX <= imgDims.w && imgY <= imgDims.h) {
+      onClick(imgX, imgY);
+    }
+  };
+
+  // Pan
+  const handleMouseDown = (e) => {
+    if (e.button === 1 || e.button === 2 || e.shiftKey) {
+      e.preventDefault();
+      dragRef.current = { dragging: true, startX: e.clientX, startY: e.clientY, startTx: transform.x, startTy: transform.y, didDrag: false };
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (!dragRef.current.dragging) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    if (Math.abs(dx) + Math.abs(dy) > 3) dragRef.current.didDrag = true;
+    setTransform(t => ({ ...t, x: dragRef.current.startTx + dx, y: dragRef.current.startTy + dy }));
+  };
+
+  const handleMouseUp = () => { dragRef.current.dragging = false; };
+
+  // Zoom
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const rect = canvasRef.current.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    setTransform(t => {
+      const newScale = Math.min(Math.max(t.scale * factor, 0.05), 50);
+      return {
+        scale: newScale,
+        x: mx - (mx - t.x) * (newScale / t.scale),
+        y: my - (my - t.y) * (newScale / t.scale),
+      };
+    });
+  };
+
+  return (
+    <div className="anno-panel">
+      <div className="anno-panel-header">
+        <div className="channel-label">
+          <span className="channel-dot" style={{ background: channel === 'rgb' ? 'var(--rgb-color)' : 'var(--thermal)' }} />
+          {channel === 'rgb' ? 'RGB' : 'Thermal'}
+          {isActive && <span style={{ color: 'var(--accent)', fontSize: 11 }}> ← click here</span>}
+        </div>
+        <span className="dims">{imgDims ? `${imgDims.w}×${imgDims.h}` : '...'} — {filename}</span>
+      </div>
+      <div
+        className={`canvas-wrap ${isActive ? 'awaiting-click' : ''}`}
+        ref={containerRef}
+        onContextMenu={e => e.preventDefault()}
+      >
+        <canvas
+          ref={canvasRef}
+          onClick={handleClick}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onWheel={handleWheel}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Results Tab ───
+function ResultsTab({ project, onRefresh }) {
+  const [calibrating, setCalibrating] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const pairs = project.pairs || [];
+  const annotations = project.annotations || {};
+  const totalPoints = Object.values(annotations).reduce(
+    (sum, a) => sum + (a.points || []).filter(p => p.rgb && p.thermal).length, 0
+  );
+  const hasCalib = !!project.initial_calibration;
+
+  const runCalibration = async () => {
+    setCalibrating(true);
+    setResult(null);
+    try {
+      const res = await api(`/api/projects/${project.id}/calibrate`, { method: 'POST' });
+      setResult(res);
+      toast('Calibration complete!', 'success');
+    } catch (e) {
+      toast(`Calibration failed: ${e.message}`, 'error');
+    }
+    setCalibrating(false);
+  };
+
+  const renderCalibTable = (calib, label) => {
+    if (!calib) return null;
+    const K = calib.mtx;
+    const dist = calib.dist;
+    return (
+      <div style={{ marginBottom: 16 }}>
+        <h4 style={{ fontSize: 13, marginBottom: 6 }}>{label}</h4>
+        <table className="calib-table">
+          <thead>
+            <tr><th>fx</th><th>fy</th><th>cx</th><th>cy</th><th>k1</th><th>k2</th><th>p1</th><th>p2</th><th>k3</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>{K[0][0].toFixed(2)}</td>
+              <td>{K[1][1].toFixed(2)}</td>
+              <td>{K[0][2].toFixed(2)}</td>
+              <td>{K[1][2].toFixed(2)}</td>
+              {(dist || []).slice(0, 5).map((d, i) => <td key={i}>{d.toFixed(6)}</td>)}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  return (
+    <div className="content" style={{ overflow: 'auto' }}>
+      <div className="results-grid">
+        <div className="result-card">
+          <h3>Run Calibration</h3>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+            <div className="result-metric">
+              <span className="value">{totalPoints}</span>
+              <span className="label">Point correspondences</span>
+            </div>
+            <div className="result-metric">
+              <span className="value">{pairs.length}</span>
+              <span className="label">Image pairs</span>
+            </div>
+            <div className="result-metric">
+              <span className={`status-badge ${hasCalib ? 'ok' : 'warn'}`}>
+                {hasCalib ? '✓ Loaded' : '⚠ Auto-estimate'}
+              </span>
+              <span className="label">Initial calibration</span>
+            </div>
+          </div>
+          {!hasCalib && (
+            <div style={{ marginBottom: 12, padding: '8px 12px', background: '#d2992215', border: '1px solid #d2992244', borderRadius: 'var(--radius)', fontSize: 12, color: 'var(--warning)' }}>
+              No initial calibration loaded — intrinsics will be auto-estimated from image dimensions (assuming ~73° hFoV for RGB, ~45° for thermal). For best results, provide factory calibration values in the <strong>② Initial Calib</strong> tab.
+            </div>
+          )}
+          <button
+            className="btn btn-primary"
+            disabled={calibrating || totalPoints < 4}
+            onClick={runCalibration}
+          >
+            {calibrating ? <><span className="spinner" /> Optimizing...</> : '▶ Run Calibration'}
+          </button>
+          {totalPoints < 4 && (
+            <span style={{ marginLeft: 12, fontSize: 12, color: 'var(--warning)' }}>
+              Need ≥ 4 point correspondences
+            </span>
+          )}
+        </div>
+
+        {result && (
+          <>
+            <div className="result-card">
+              <h3>Calibration Results</h3>
+              {result.used_auto_estimate && (
+                <div style={{ marginBottom: 12, padding: '8px 12px', background: '#d2992215', border: '1px solid #d2992244', borderRadius: 'var(--radius)', fontSize: 12, color: 'var(--warning)' }}>
+                  ⚠ Used auto-estimated initial intrinsics. Results may improve if you provide factory calibration values.
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+                <div className="result-metric">
+                  <span className="value">{result.homography_mse.toFixed(4)}</span>
+                  <span className="label">Homography MSE</span>
+                </div>
+                <div className="result-metric">
+                  <span className="value">{result.optimized_mse.toFixed(4)}</span>
+                  <span className="label">Optimized MSE</span>
+                </div>
+                <div className="result-metric">
+                  <span className="value">
+                    {result.inlier_mask.filter(m => m === 1).length}/{result.num_points}
+                  </span>
+                  <span className="label">RANSAC inliers</span>
+                </div>
+              </div>
+
+              {renderCalibTable(result.optimized_calibration?.Thermal, 'Optimized Thermal Intrinsics')}
+              {renderCalibTable(result.optimized_calibration?.Wide, 'Wide / RGB Intrinsics (unchanged)')}
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                <a className="btn btn-success" href={`/api/projects/${project.id}/download-calibration`} target="_blank">
+                  ↓ Download calibration.json
+                </a>
+                <a className="btn" href={`/api/projects/${project.id}/download-annotations`} target="_blank">
+                  ↓ Download pairs.xml
+                </a>
+              </div>
+            </div>
+
+            {result.overlay_images && result.overlay_images.length > 0 && (
+              <div className="result-card">
+                <h3>Overlay Preview (Thermal + RGB edges)</h3>
+                <div className="overlay-gallery">
+                  {result.overlay_images.map((name, idx) => (
+                    <img
+                      key={idx}
+                      src={`/api/projects/${project.id}/result-image/${name}`}
+                      alt={`Overlay ${idx}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Mount ───
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
