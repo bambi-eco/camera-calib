@@ -479,11 +479,14 @@ def _write_annotations_xml(project_id: str, meta: dict):
 
             coord_key = "rgb" if channel == "rgb" else "thermal"
             for pt in pts:
+                coord = pt.get(coord_key)
+                if not coord:   # skip half-placed points missing this channel
+                    continue
                 points_el = ET.SubElement(img_el, "points")
                 points_el.set("label", str(pt["label"]))
                 points_el.set("occluded", "0")
                 points_el.set("source", "manual")
-                points_el.set("points", f"{pt[coord_key][0]},{pt[coord_key][1]}")
+                points_el.set("points", f"{coord[0]},{coord[1]}")
                 points_el.set("z_order", "0")
 
     xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(indent="   ")
