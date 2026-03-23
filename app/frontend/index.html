@@ -119,6 +119,20 @@ body {
   font-family: var(--font-mono);
 }
 
+.project-item .edit-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  padding: 0 3px;
+  font-size: 12px;
+  line-height: 1;
+  transition: opacity 0.15s;
+}
+.project-item:hover .edit-btn { opacity: 1; }
+.project-item.active .edit-btn { color: #600; }
+
 .project-item .delete-btn {
   opacity: 0;
   background: none;
@@ -682,6 +696,40 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
+/* Single-camera image grid */
+.sc-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.sc-image-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.sc-image-card img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  display: block;
+}
+
+.sc-image-card.sc-found  { border-color: var(--success); }
+.sc-image-card.sc-not-found { border-color: var(--danger); }
+
+.sc-image-name {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Initial calib upload card */
 .calib-upload-zone {
   border: 2px dashed var(--border);
@@ -849,6 +897,9 @@ function App() {
   const [projects, setProjects] = useState([]);
   const [activeProject, setActiveProject] = useState(null);
   const [tab, setTab] = useState('upload'); // upload | annotate | calibrate | results
+  const [mode, setMode] = useState('stereo'); // 'stereo' | 'single'
+  const [singleProjects, setSingleProjects] = useState([]);
+  const [activeSingleProject, setActiveSingleProject] = useState(null);
 
   const loadProjects = useCallback(async () => {
     try {
@@ -878,6 +929,18 @@ function App() {
     await loadProjects();
   };
 
+  const renameProject = async (e, pid, newName) => {
+    e.stopPropagation();
+    if (!newName.trim()) return;
+    const updated = await api(`/api/projects/${pid}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName.trim() }),
+    });
+    setProjects(ps => ps.map(p => p.id === pid ? { ...p, name: updated.name } : p));
+    if (activeProject?.id === pid) setActiveProject(a => ({ ...a, name: updated.name }));
+  };
+
   const selectProject = async (proj) => {
     const full = await api(`/api/projects/${proj.id}`);
     setActiveProject(full);
@@ -889,18 +952,73 @@ function App() {
     setActiveProject(full);
   };
 
+  const loadSingleProjects = useCallback(async () => {
+    try {
+      const data = await api('/api/single-calib/projects');
+      setSingleProjects(data);
+    } catch (e) { console.error(e); }
+  }, []);
+
+  useEffect(() => { if (mode === 'single') loadSingleProjects(); }, [mode, loadSingleProjects]);
+
+  const createSingleProject = async () => {
+    const name = prompt('Project name:', `Single Calib ${singleProjects.length + 1}`);
+    if (!name) return;
+    const fd = new FormData();
+    fd.append('name', name);
+    const proj = await api('/api/single-calib/projects', { method: 'POST', body: fd });
+    await loadSingleProjects();
+    setActiveSingleProject(proj);
+  };
+
+  const deleteSingleProject = async (e, pid) => {
+    e.stopPropagation();
+    if (!confirm('Delete this project?')) return;
+    await api(`/api/single-calib/projects/${pid}`, { method: 'DELETE' });
+    if (activeSingleProject?.id === pid) setActiveSingleProject(null);
+    await loadSingleProjects();
+  };
+
+  const renameSingleProject = async (e, pid, newName) => {
+    e.stopPropagation();
+    if (!newName.trim()) return;
+    const updated = await api(`/api/single-calib/projects/${pid}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName.trim() }),
+    });
+    setSingleProjects(ps => ps.map(p => p.id === pid ? { ...p, name: updated.name } : p));
+    if (activeSingleProject?.id === pid) setActiveSingleProject(a => ({ ...a, name: updated.name }));
+  };
+
+  const selectSingleProject = async (proj) => {
+    const full = await api(`/api/single-calib/projects/${proj.id}`);
+    setActiveSingleProject(full);
+  };
+
+  const refreshSingleProject = async () => {
+    if (!activeSingleProject) return;
+    const full = await api(`/api/single-calib/projects/${activeSingleProject.id}`);
+    setActiveSingleProject(full);
+  };
+
   return (
     <div className="app">
       <div className="sidebar">
         <div className="sidebar-header">
           <div>
             <div className="logo">CAM·CALIB</div>
-            <div className="logo-sub">Thermal / RGB Alignment</div>
+            <div className="logo-sub">{mode === 'stereo' ? 'Thermal / RGB Alignment' : 'Single Camera'}</div>
           </div>
         </div>
 
+        <div className="sidebar-section" style={{ display: 'flex', gap: 4 }}>
+          <button className={`btn btn-sm ${mode === 'stereo' ? 'btn-primary' : ''}`} style={{ flex: 1 }} onClick={() => setMode('stereo')}>Stereo</button>
+          <button className={`btn btn-sm ${mode === 'single' ? 'btn-primary' : ''}`} style={{ flex: 1 }} onClick={() => setMode('single')}>Single Cam</button>
+        </div>
+
         <div className="sidebar-section">
-          <button className="btn btn-primary btn-block" onClick={createProject}>
+          <button className="btn btn-primary btn-block" onClick={mode === 'stereo' ? createProject : createSingleProject}>
             + New Project
           </button>
         </div>
@@ -909,61 +1027,96 @@ function App() {
           <div className="sidebar-section" style={{ border: 'none', padding: '4px 0' }}>
             <h3>Projects</h3>
           </div>
-          {projects.map(p => (
-            <div
-              key={p.id}
-              className={`project-item ${activeProject?.id === p.id ? 'active' : ''}`}
-              onClick={() => selectProject(p)}
-            >
-              <span>{p.name}</span>
-              <span className="project-pairs">{(p.pairs || []).length}pr</span>
-              <button className="delete-btn" onClick={(e) => deleteProject(e, p.id)}>✕</button>
-            </div>
-          ))}
-          {projects.length === 0 && (
-            <div style={{ padding: '12px', fontSize: 12, color: 'var(--text-dim)', textAlign: 'center' }}>
-              No projects yet
-            </div>
+          {mode === 'stereo' ? (
+            <>
+              {projects.map(p => (
+                <ProjectItem
+                  key={p.id}
+                  project={p}
+                  isActive={activeProject?.id === p.id}
+                  badge={`${(p.pairs || []).length}pr`}
+                  onSelect={() => selectProject(p)}
+                  onRename={(e, name) => renameProject(e, p.id, name)}
+                  onDelete={(e) => deleteProject(e, p.id)}
+                />
+              ))}
+              {projects.length === 0 && (
+                <div style={{ padding: '12px', fontSize: 12, color: 'var(--text-dim)', textAlign: 'center' }}>
+                  No projects yet
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {singleProjects.map(p => (
+                <ProjectItem
+                  key={p.id}
+                  project={p}
+                  isActive={activeSingleProject?.id === p.id}
+                  badge={`${(p.images || []).length}img`}
+                  onSelect={() => selectSingleProject(p)}
+                  onRename={(e, name) => renameSingleProject(e, p.id, name)}
+                  onDelete={(e) => deleteSingleProject(e, p.id)}
+                />
+              ))}
+              {singleProjects.length === 0 && (
+                <div style={{ padding: '12px', fontSize: 12, color: 'var(--text-dim)', textAlign: 'center' }}>
+                  No projects yet
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
 
       <div className="main">
-        {activeProject ? (
-          <>
-            <div className="tab-bar">
-              <button className={`tab ${tab === 'upload' ? 'active' : ''}`} onClick={() => setTab('upload')}>
-                ① Upload
-              </button>
-              <button className={`tab ${tab === 'calibration-input' ? 'active' : ''}`} onClick={() => setTab('calibration-input')}>
-                ② Initial Calib <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 400 }}>(optional)</span>
-              </button>
-              <button className={`tab ${tab === 'annotate' ? 'active' : ''}`} onClick={() => setTab('annotate')}>
-                ③ Annotate
-              </button>
-              <button className={`tab ${tab === 'results' ? 'active' : ''}`} onClick={() => setTab('results')}>
-                ④ Results
-              </button>
+        {mode === 'stereo' ? (
+          activeProject ? (
+            <>
+              <div className="tab-bar">
+                <button className={`tab ${tab === 'upload' ? 'active' : ''}`} onClick={() => setTab('upload')}>
+                  ① Upload
+                </button>
+                <button className={`tab ${tab === 'calibration-input' ? 'active' : ''}`} onClick={() => setTab('calibration-input')}>
+                  ② Initial Calib <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 400 }}>(optional)</span>
+                </button>
+                <button className={`tab ${tab === 'annotate' ? 'active' : ''}`} onClick={() => setTab('annotate')}>
+                  ③ Annotate
+                </button>
+                <button className={`tab ${tab === 'results' ? 'active' : ''}`} onClick={() => setTab('results')}>
+                  ④ Results
+                </button>
+              </div>
+              {tab === 'upload' && (
+                <UploadTab project={activeProject} onRefresh={refreshProject} />
+              )}
+              {tab === 'calibration-input' && (
+                <CalibrationInputTab project={activeProject} onRefresh={refreshProject} />
+              )}
+              {tab === 'annotate' && (
+                <AnnotateTab project={activeProject} onRefresh={refreshProject} />
+              )}
+              {tab === 'results' && (
+                <ResultsTab project={activeProject} onRefresh={refreshProject} />
+              )}
+            </>
+          ) : (
+            <div className="empty-state">
+              <div className="icon">⊞</div>
+              <h2>Select or create a project</h2>
+              <p>Create a new calibration project to start uploading RGB and thermal image/video pairs for keypoint annotation and camera calibration.</p>
             </div>
-            {tab === 'upload' && (
-              <UploadTab project={activeProject} onRefresh={refreshProject} />
-            )}
-            {tab === 'calibration-input' && (
-              <CalibrationInputTab project={activeProject} onRefresh={refreshProject} />
-            )}
-            {tab === 'annotate' && (
-              <AnnotateTab project={activeProject} onRefresh={refreshProject} />
-            )}
-            {tab === 'results' && (
-              <ResultsTab project={activeProject} onRefresh={refreshProject} />
-            )}
-          </>
+          )
         ) : (
-          <div className="empty-state">
-            <div className="icon">⊞</div>
-            <h2>Select or create a project</h2>
-            <p>Create a new calibration project to start uploading RGB and thermal image/video pairs for keypoint annotation and camera calibration.</p>
-          </div>
+          activeSingleProject ? (
+            <SingleCamProjectView project={activeSingleProject} onRefresh={refreshSingleProject} />
+          ) : (
+            <div className="empty-state">
+              <div className="icon">◎</div>
+              <h2>Select or create a project</h2>
+              <p>Upload checkerboard images from a single camera to compute its intrinsics and distortion coefficients automatically.</p>
+            </div>
+          )
         )}
       </div>
     </div>
@@ -1009,6 +1162,16 @@ function UploadTab({ project, onRefresh }) {
       toast(`Video upload failed: ${e.message}`, 'error');
     }
     setUploading(false);
+  };
+
+  const deletePair = async (pairId) => {
+    try {
+      await api(`/api/projects/${project.id}/pairs/${pairId}`, { method: 'DELETE' });
+      toast('Pair deleted', 'success');
+      await onRefresh();
+    } catch (e) {
+      toast(`Delete failed: ${e.message}`, 'error');
+    }
   };
 
   const uploadVideoPair = async (rgbFile, thermalFile) => {
@@ -1109,22 +1272,32 @@ function UploadTab({ project, onRefresh }) {
             {pairs.map(p => (
               <div key={p.id} style={{
                 display: 'flex', gap: 8, background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)', padding: 8, alignItems: 'center'
+                borderRadius: 'var(--radius)', padding: 8, alignItems: 'center', position: 'relative'
               }}>
                 <img
                   src={`/api/projects/${project.id}/image/rgb/${p.rgb}`}
                   style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 4 }}
                   alt=""
                 />
-                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', flex: 1 }}>
                   <div style={{ color: 'var(--rgb-color)' }}>RGB: {p.rgb}</div>
                   <div style={{ color: 'var(--thermal)' }}>TH: {p.thermal}</div>
                 </div>
                 <img
                   src={`/api/projects/${project.id}/image/thermal/${p.thermal}`}
-                  style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 4, marginLeft: 'auto' }}
+                  style={{ width: 80, height: 60, objectFit: 'cover', borderRadius: 4 }}
                   alt=""
                 />
+                <button
+                  onClick={() => deletePair(p.id)}
+                  title="Delete this pair"
+                  style={{
+                    position: 'absolute', top: 4, right: 4,
+                    background: 'var(--danger)', color: '#fff', border: 'none',
+                    borderRadius: '50%', width: 20, height: 20, cursor: 'pointer',
+                    fontSize: 12, lineHeight: '20px', padding: 0, textAlign: 'center'
+                  }}
+                >×</button>
               </div>
             ))}
           </div>
@@ -1212,6 +1385,18 @@ function CalibrationInputTab({ project, onRefresh }) {
     }
   };
 
+  const removeCalib = async () => {
+    try {
+      await api(`/api/projects/${project.id}/initial-calibration`, { method: 'DELETE' });
+      setCalib(null);
+      if (fileRef.current) fileRef.current.value = '';
+      toast('Initial calibration removed', 'success');
+      await onRefresh();
+    } catch (e) {
+      toast(`Failed to remove calibration: ${e.message}`, 'error');
+    }
+  };
+
   const saveCalib = async () => {
     try {
       await api(`/api/projects/${project.id}/initial-calibration`, {
@@ -1274,9 +1459,14 @@ function CalibrationInputTab({ project, onRefresh }) {
             <input ref={fileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleUploadJSON} />
           </div>
           {calib && (
-            <button className="btn btn-success" onClick={saveCalib}>
-              💾 Save Changes
-            </button>
+            <>
+              <button className="btn btn-success" onClick={saveCalib}>
+                💾 Save Changes
+              </button>
+              <button className="btn" onClick={removeCalib} style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }} title="Remove initial calibration">
+                ✕ Remove
+              </button>
+            </>
           )}
         </div>
 
@@ -1327,15 +1517,52 @@ function AnnotateTab({ project, onRefresh }) {
   const pairs = project.pairs || [];
   const [pairIdx, setPairIdx] = useState(0);
   const [annotations, setAnnotations] = useState(project.annotations || {});
-  const [clickTarget, setClickTarget] = useState(null); // null | 'rgb' | 'thermal'
-  const [saving, setSaving] = useState(false);
+  const xmlImportRef = useRef(null);
+  const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'unsaved'
+  const autoSaveTimer = useRef(null);
+  const skipNextSave = useRef(true); // skip initial mount + project switches
   const [showHeatmap, setShowHeatmap] = useState(false);
   const [heatmapRows, setHeatmapRows] = useState(8);
   const [heatmapCols, setHeatmapCols] = useState(8);
+  const [tool, setTool] = useState('place'); // 'place' | 'grab'
+  const grabUndoPushed = useRef(false);
 
   // Undo stack — stores previous annotation snapshots (max 50)
   const undoStackRef = useRef([]);
   const [undoCount, setUndoCount] = useState(0);
+
+  // Sync annotations and reset pair index when the project changes
+  useEffect(() => {
+    skipNextSave.current = true;
+    setAnnotations(project.annotations || {});
+    setPairIdx(0);
+    undoStackRef.current = [];
+    setUndoCount(0);
+    setSaveStatus('saved');
+  }, [project.id]);
+
+  // Auto-save 800 ms after any annotation change
+  useEffect(() => {
+    if (skipNextSave.current) { skipNextSave.current = false; return; }
+    setSaveStatus('unsaved');
+    clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(async () => {
+      setSaveStatus('saving');
+      try {
+        await api(`/api/projects/${project.id}/annotations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ annotations }),
+        });
+        setSaveStatus('saved');
+      } catch (e) {
+        setSaveStatus('unsaved');
+        toast(`Auto-save failed: ${e.message}`, 'error');
+      }
+    }, 800);
+    return () => clearTimeout(autoSaveTimer.current);
+  }, [annotations]);
+
   const MAX_UNDO = 50;
 
   const pushUndo = useCallback((prevAnnotations) => {
@@ -1370,15 +1597,15 @@ function AnnotateTab({ project, onRefresh }) {
   const pairId = pair ? String(pair.id) : null;
   const currentPoints = pairId && annotations[pairId] ? annotations[pairId].points || [] : [];
 
-  // Determine what click is expected next
+  // Determine what click is expected next.
+  // null means no half-point is pending — both panels accept a new point.
   const pendingChannel = useMemo(() => {
-    if (clickTarget) return clickTarget;
-    // Auto-determine: if last point has rgb but not thermal, expect thermal
-    if (currentPoints.length === 0) return 'rgb';
+    if (currentPoints.length === 0) return null;
     const last = currentPoints[currentPoints.length - 1];
-    if (last && last.rgb && !last.thermal) return 'thermal';
-    return 'rgb';
-  }, [currentPoints, clickTarget]);
+    if (last.rgb && !last.thermal) return 'thermal';
+    if (last.thermal && !last.rgb) return 'rgb';
+    return null; // last point is complete — either channel starts the next one
+  }, [currentPoints]);
 
   const handleCanvasClick = useCallback((channel, x, y) => {
     if (!pairId) return;
@@ -1387,15 +1614,21 @@ function AnnotateTab({ project, onRefresh }) {
       const copy = JSON.parse(JSON.stringify(prev));
       if (!copy[pairId]) copy[pairId] = { points: [] };
       const pts = copy[pairId].points;
+      const rounded = [Math.round(x), Math.round(y)];
 
       if (channel === 'rgb') {
-        // Start a new point pair
-        pts.push({ label: String(pts.length), rgb: [Math.round(x), Math.round(y)], thermal: null });
+        const pending = pts.findLast(p => p.thermal && !p.rgb);
+        if (pending) {
+          pending.rgb = rounded; // complete a thermal-first half-point
+        } else {
+          pts.push({ label: String(pts.length), rgb: rounded, thermal: null });
+        }
       } else {
-        // Find the last point missing thermal
         const pending = pts.findLast(p => p.rgb && !p.thermal);
         if (pending) {
-          pending.thermal = [Math.round(x), Math.round(y)];
+          pending.thermal = rounded; // complete an rgb-first half-point
+        } else {
+          pts.push({ label: String(pts.length), rgb: null, thermal: rounded });
         }
       }
       return copy;
@@ -1414,21 +1647,44 @@ function AnnotateTab({ project, onRefresh }) {
     });
   };
 
-  const saveAnnotations = async () => {
-    setSaving(true);
+  const handleMovePoint = useCallback((channel, idx, x, y) => {
+    if (!pairId) return;
+    setAnnotations(prev => {
+      if (!grabUndoPushed.current) {
+        pushUndo(prev);
+        grabUndoPushed.current = true;
+      }
+      const copy = JSON.parse(JSON.stringify(prev));
+      if (!copy[pairId]?.points?.[idx]) return prev;
+      copy[pairId].points[idx][channel] = [Math.round(x), Math.round(y)];
+      return copy;
+    });
+  }, [pairId, pushUndo]);
+
+  const handleDragEnd = useCallback(() => {
+    grabUndoPushed.current = false;
+  }, []);
+
+  const importXml = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const fd = new FormData();
+    fd.append('file', file);
     try {
-      await api(`/api/projects/${project.id}/annotations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ annotations }),
-      });
-      toast('Annotations saved', 'success');
+      const res = await fetch(`/api/projects/${project.id}/upload-annotations`, { method: 'POST', body: fd });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Upload failed'); }
+      const data = await res.json();
+      skipNextSave.current = true; // backend already saved via upload endpoint
+      setAnnotations(data.annotations);
+      setSaveStatus('saved');
+      toast(`Imported annotations for ${data.imported} pair(s)`, 'success');
       await onRefresh();
     } catch (e) {
-      toast(`Save failed: ${e.message}`, 'error');
+      toast(`Import failed: ${e.message}`, 'error');
     }
-    setSaving(false);
   };
+
 
   const totalPoints = Object.values(annotations).reduce(
     (sum, a) => sum + (a.points || []).filter(p => p.rgb && p.thermal).length, 0
@@ -1453,11 +1709,27 @@ function AnnotateTab({ project, onRefresh }) {
           <button className="btn btn-sm" disabled={pairIdx >= pairs.length - 1} onClick={() => setPairIdx(i => i + 1)}>▶</button>
         </div>
         <div className="divider" />
-        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          Click: <strong style={{ color: pendingChannel === 'rgb' ? 'var(--rgb-color)' : 'var(--thermal)' }}>
-            {pendingChannel === 'rgb' ? 'RGB' : 'Thermal'}
-          </strong> image to place point #{currentPoints.length + (pendingChannel === 'thermal' ? 0 : 1) - (pendingChannel === 'thermal' ? 0 : 0)}
-        </span>
+        <button
+          className={`btn btn-sm ${tool === 'place' ? 'btn-primary' : ''}`}
+          onClick={() => setTool('place')}
+          title="Place new annotation points"
+        >+ Place</button>
+        <button
+          className={`btn btn-sm ${tool === 'grab' ? 'btn-primary' : ''}`}
+          onClick={() => setTool('grab')}
+          title="Drag existing annotation points"
+          style={{ marginLeft: 4 }}
+        >&#10021; Grab</button>
+        <div className="divider" />
+        {tool === 'place' && (
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {pendingChannel === null ? (
+              <>Click <strong style={{ color: 'var(--rgb-color)' }}>RGB</strong> or <strong style={{ color: 'var(--thermal)' }}>Thermal</strong> to start point #{currentPoints.filter(p => p.rgb && p.thermal).length + 1}</>
+            ) : (
+              <>Click <strong style={{ color: pendingChannel === 'rgb' ? 'var(--rgb-color)' : 'var(--thermal)' }}>{pendingChannel === 'rgb' ? 'RGB' : 'Thermal'}</strong> to complete point #{currentPoints.length}</>
+            )}
+          </span>
+        )}
         <div className="divider" />
         <span className="status-badge ok">{totalPoints} total points</span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
@@ -1477,12 +1749,16 @@ function AnnotateTab({ project, onRefresh }) {
           >
             🗺 Heatmap
           </button>
-          <button className="btn btn-sm" onClick={saveAnnotations} disabled={saving}>
-            {saving ? <span className="spinner" /> : '💾'} Save
-          </button>
+          <span style={{ fontSize: 12, color: saveStatus === 'saved' ? 'var(--success)' : saveStatus === 'saving' ? 'var(--text-muted)' : 'var(--warning)' }}>
+            {saveStatus === 'saving' ? <><span className="spinner" /> Saving…</> : saveStatus === 'saved' ? '✓ Saved' : '● Unsaved'}
+          </span>
           <a className="btn btn-sm" href={`/api/projects/${project.id}/download-annotations`} target="_blank">
             ↓ XML
           </a>
+          <input ref={xmlImportRef} type="file" accept=".xml" style={{ display: 'none' }} onChange={importXml} />
+          <button className="btn btn-sm" onClick={() => xmlImportRef.current?.click()} title="Import annotations from pairs.xml">
+            ↑ XML
+          </button>
         </div>
       </div>
 
@@ -1494,10 +1770,13 @@ function AnnotateTab({ project, onRefresh }) {
             pair={pair}
             channel={channel}
             points={currentPoints}
-            isActive={pendingChannel === channel}
+            isActive={tool === 'place' && (pendingChannel === null || pendingChannel === channel)}
+            tool={tool}
             onClick={(x, y) => {
-              if (pendingChannel === channel) handleCanvasClick(channel, x, y);
+              if (tool === 'place' && (pendingChannel === null || pendingChannel === channel)) handleCanvasClick(channel, x, y);
             }}
+            onMovePoint={(idx, x, y) => handleMovePoint(channel, idx, x, y)}
+            onDragEnd={handleDragEnd}
           />
         ))}
       </div>
@@ -1742,7 +2021,7 @@ function HeatmapPanel({ projectId, annotations, rows, cols, onRowsChange, onCols
 }
 
 // ─── Annotation Panel (single image canvas with zoom/pan) ───
-function AnnotationPanel({ projectId, pair, channel, points, isActive, onClick }) {
+function AnnotationPanel({ projectId, pair, channel, points, isActive, tool, onClick, onMovePoint, onDragEnd }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const imgRef = useRef(null);
@@ -1750,6 +2029,8 @@ function AnnotationPanel({ projectId, pair, channel, points, isActive, onClick }
   const [imgDims, setImgDims] = useState(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const dragRef = useRef({ dragging: false, startX: 0, startY: 0, startTx: 0, startTy: 0 });
+  const pointDragRef = useRef({ active: false, idx: -1 });
+  const [hoveredPointIdx, setHoveredPointIdx] = useState(-1);
 
   const filename = channel === 'rgb' ? pair.rgb : pair.thermal;
   const imgUrl = `/api/projects/${projectId}/image/${channel}/${filename}`;
@@ -1824,6 +2105,18 @@ function AnnotationPanel({ projectId, pair, channel, points, isActive, onClick }
       ctx.arc(px, py, r, 0, Math.PI * 2);
       ctx.stroke();
 
+      // Highlight hovered / dragged point
+      if (idx === hoveredPointIdx) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = lineW;
+        ctx.setLineDash([Math.max(2, 4 / scale), Math.max(2, 4 / scale)]);
+        ctx.beginPath();
+        ctx.arc(px, py, r * 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.strokeStyle = channel === 'rgb' ? '#58a6ff' : '#ff6b35';
+      }
+
       // Label
       ctx.font = `bold ${fontSize}px "JetBrains Mono", monospace`;
       ctx.fillStyle = '#fff';
@@ -1835,7 +2128,13 @@ function AnnotationPanel({ projectId, pair, channel, points, isActive, onClick }
     });
 
     ctx.restore();
-  }, [transform, points, imgLoaded, channel]);
+  }, [transform, points, imgLoaded, channel, hoveredPointIdx]);
+
+  // Reset hover state when tool changes
+  useEffect(() => {
+    if (canvasRef.current) canvasRef.current.style.cursor = '';
+    setHoveredPointIdx(-1);
+  }, [tool]);
 
   // Canvas click → image coordinates
   const handleClick = (e) => {
@@ -1850,8 +2149,33 @@ function AnnotationPanel({ projectId, pair, channel, points, isActive, onClick }
     }
   };
 
-  // Pan
+  // Pan / point grab
   const handleMouseDown = (e) => {
+    if (e.button === 0 && tool === 'grab') {
+      e.preventDefault();
+      const rect = canvasRef.current.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const imgX = (cx - transform.x) / transform.scale;
+      const imgY = (cy - transform.y) / transform.scale;
+      const hitRadius = 12 / transform.scale;
+      let nearest = -1, nearestDist = Infinity;
+      points.forEach((pt, idx) => {
+        const coord = pt[channel];
+        if (!coord) return;
+        const dx = coord[0] - imgX, dy = coord[1] - imgY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < hitRadius && dist < nearestDist) { nearest = idx; nearestDist = dist; }
+      });
+      if (nearest >= 0) {
+        pointDragRef.current = { active: true, idx: nearest };
+        dragRef.current.didDrag = false;
+        if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
+      } else {
+        dragRef.current = { dragging: true, startX: e.clientX, startY: e.clientY, startTx: transform.x, startTy: transform.y, didDrag: false };
+      }
+      return;
+    }
     if (e.button === 1 || e.button === 2 || e.shiftKey) {
       e.preventDefault();
       dragRef.current = { dragging: true, startX: e.clientX, startY: e.clientY, startTx: transform.x, startTy: transform.y, didDrag: false };
@@ -1859,14 +2183,53 @@ function AnnotationPanel({ projectId, pair, channel, points, isActive, onClick }
   };
 
   const handleMouseMove = (e) => {
-    if (!dragRef.current.dragging) return;
-    const dx = e.clientX - dragRef.current.startX;
-    const dy = e.clientY - dragRef.current.startY;
-    if (Math.abs(dx) + Math.abs(dy) > 3) dragRef.current.didDrag = true;
-    setTransform(t => ({ ...t, x: dragRef.current.startTx + dx, y: dragRef.current.startTy + dy }));
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+
+    if (pointDragRef.current.active) {
+      const imgX = (cx - transform.x) / transform.scale;
+      const imgY = (cy - transform.y) / transform.scale;
+      dragRef.current.didDrag = true;
+      onMovePoint(pointDragRef.current.idx, imgX, imgY);
+      return;
+    }
+
+    if (dragRef.current.dragging) {
+      const dx = e.clientX - dragRef.current.startX;
+      const dy = e.clientY - dragRef.current.startY;
+      if (Math.abs(dx) + Math.abs(dy) > 3) dragRef.current.didDrag = true;
+      setTransform(t => ({ ...t, x: dragRef.current.startTx + dx, y: dragRef.current.startTy + dy }));
+      return;
+    }
+
+    if (tool === 'grab' && canvasRef.current) {
+      const imgX = (cx - transform.x) / transform.scale;
+      const imgY = (cy - transform.y) / transform.scale;
+      const hitRadius = 12 / transform.scale;
+      let nearest = -1, nearestDist = Infinity;
+      points.forEach((pt, idx) => {
+        const coord = pt[channel];
+        if (!coord) return;
+        const dx = coord[0] - imgX, dy = coord[1] - imgY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < hitRadius && dist < nearestDist) { nearest = idx; nearestDist = dist; }
+      });
+      setHoveredPointIdx(nearest);
+      canvasRef.current.style.cursor = nearest >= 0 ? 'grab' : 'default';
+    }
   };
 
-  const handleMouseUp = () => { dragRef.current.dragging = false; };
+  const handleMouseUp = () => {
+    if (pointDragRef.current.active) {
+      pointDragRef.current = { active: false, idx: -1 };
+      onDragEnd?.();
+      if (canvasRef.current) canvasRef.current.style.cursor = hoveredPointIdx >= 0 ? 'grab' : 'default';
+    }
+    dragRef.current.dragging = false;
+    dragRef.current.didDrag = false;
+  };
 
   // Zoom
   const handleWheel = (e) => {
@@ -1918,6 +2281,12 @@ function AnnotationPanel({ projectId, pair, channel, points, isActive, onClick }
 function ResultsTab({ project, onRefresh }) {
   const [calibrating, setCalibrating] = useState(false);
   const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    api(`/api/projects/${project.id}/calibration-result`)
+      .then(r => { if (r) setResult(r); })
+      .catch(() => {});
+  }, [project.id]);
 
   const pairs = project.pairs || [];
   const annotations = project.annotations || {};
@@ -2071,6 +2440,332 @@ function ResultsTab({ project, onRefresh }) {
 }
 
 // ─── Mount ───
+// ─── Single Camera Calibration ───
+
+function SingleCamProjectView({ project, onRefresh }) {
+  const [tab, setTab] = useState('upload');
+  return (
+    <>
+      <div className="tab-bar">
+        <button className={`tab ${tab === 'upload' ? 'active' : ''}`} onClick={() => setTab('upload')}>
+          ① Upload
+        </button>
+        <button className={`tab ${tab === 'results' ? 'active' : ''}`} onClick={() => setTab('results')}>
+          ② Results {project.calibration && <span className="status-badge ok" style={{ marginLeft: 6 }}>✓</span>}
+        </button>
+      </div>
+      {tab === 'upload'  && <SingleUploadTab  project={project} onRefresh={onRefresh} />}
+      {tab === 'results' && <SingleResultsTab project={project} onRefresh={onRefresh} />}
+    </>
+  );
+}
+
+function SingleUploadTab({ project, onRefresh }) {
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+
+  const handleFiles = async (files) => {
+    const accepted = [...files].filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+    if (!accepted.length) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      for (const f of accepted) fd.append('files', f);
+      await api(`/api/single-calib/projects/${project.id}/upload`, { method: 'POST', body: fd });
+      toast(`Uploaded ${accepted.length} file(s)`, 'success');
+      await onRefresh();
+    } catch (e) {
+      toast(`Upload failed: ${e.message}`, 'error');
+    }
+    setUploading(false);
+  };
+
+  const deleteImage = async (name) => {
+    try {
+      await api(`/api/single-calib/projects/${project.id}/image/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      toast(`Deleted ${name}`, 'success');
+      await onRefresh();
+    } catch (e) {
+      toast(`Delete failed: ${e.message}`, 'error');
+    }
+  };
+
+  return (
+    <div className="content" style={{ overflow: 'auto' }}>
+      <div style={{ padding: 16 }}>
+        <div
+          className="calib-upload-zone"
+          style={{ marginBottom: 16, padding: 32 }}
+          onClick={() => fileRef.current?.click()}
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
+        >
+          {uploading
+            ? <><span className="spinner" /> Uploading...</>
+            : '📂 Click or drop images or videos of any scene (multiple viewpoints required)'}
+          <input ref={fileRef} type="file" multiple accept="image/*,video/*" style={{ display: 'none' }}
+            onChange={e => handleFiles(e.target.files)} />
+        </div>
+
+        {project.images?.length > 0 ? (
+          <>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+              {project.images.length} image{project.images.length !== 1 ? 's' : ''} uploaded
+            </div>
+            <div className="sc-image-grid">
+              {project.images.map(name => (
+                <div key={name} className="sc-image-card" style={{ position: 'relative' }}>
+                  <img src={`/api/single-calib/projects/${project.id}/image/${encodeURIComponent(name)}`} alt={name} />
+                  <div className="sc-image-name">{name}</div>
+                  <button
+                    onClick={() => deleteImage(name)}
+                    title="Delete image"
+                    style={{
+                      position: 'absolute', top: 4, right: 4,
+                      background: 'var(--danger)', color: '#fff', border: 'none',
+                      borderRadius: '50%', width: 20, height: 20, cursor: 'pointer',
+                      fontSize: 12, lineHeight: '20px', padding: 0, textAlign: 'center'
+                    }}
+                  >×</button>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 20 }}>
+            Upload 10–20+ images or videos of a textured scene from different viewpoints. No calibration target needed — any scene with rich detail works.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SingleResultsTab({ project, onRefresh }) {
+  const [calibrating, setCalibrating] = useState(false);
+  const [result, setResult] = useState(project.calibration || null);
+  const [previewImg, setPreviewImg] = useState(null);
+  const [showUndistorted, setShowUndistorted] = useState(true);
+  const imageCount = project.images?.length || 0;
+
+  useEffect(() => { setResult(project.calibration || null); }, [project.calibration]);
+  useEffect(() => {
+    if (project.images?.length > 0 && !previewImg) setPreviewImg(project.images[0]);
+  }, [project.images]);
+
+  const runCalibration = async () => {
+    setCalibrating(true);
+    try {
+      const res = await api(`/api/single-calib/projects/${project.id}/calibrate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      setResult(res);
+      toast('Calibration complete!', 'success');
+      await onRefresh();
+    } catch (e) {
+      toast(`Calibration failed: ${e.message}`, 'error');
+    }
+    setCalibrating(false);
+  };
+
+  const K = result?.mtx;
+  const dist = result?.dist || [];
+
+  return (
+    <div className="content" style={{ overflow: 'auto' }}>
+      <div className="results-grid">
+        <div className="result-card">
+          <h3>Run SfM Calibration</h3>
+          <div className="result-metric">
+            <span className="value">{imageCount}</span>
+            <span className="label">Images / frames</span>
+          </div>
+          {imageCount < 2 && (
+            <div style={{ fontSize: 12, color: 'var(--warning)', margin: '8px 0' }}>
+              ⚠ Upload at least 2 images with scene overlap.
+            </div>
+          )}
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', margin: '8px 0 12px' }}>
+            Extracts SIFT features, matches image pairs, estimates focal length from fundamental matrices, then jointly optimises K + poses via bundle adjustment.
+          </div>
+          <button className="btn btn-primary" onClick={runCalibration} disabled={calibrating || imageCount < 2}>
+            {calibrating ? <><span className="spinner" /> Reconstructing...</> : '▶ Run SfM Calibration'}
+          </button>
+        </div>
+
+        {result && (
+          <>
+            <div className="result-card">
+              <h3>Results</h3>
+              <div className="result-metric">
+                <span className="value" style={{ color: result.rms < 1 ? 'var(--success)' : result.rms < 2 ? 'var(--warning)' : 'var(--danger)' }}>
+                  {result.rms.toFixed(4)}
+                </span>
+                <span className="label">RMS reprojection error (px)</span>
+              </div>
+              <div className="result-metric">
+                <span className="value">{result.num_images}</span>
+                <span className="label">Cameras registered</span>
+              </div>
+              <div className="result-metric">
+                <span className="value">{result.num_pairs}</span>
+                <span className="label">Matched pairs</span>
+              </div>
+              <div className="result-metric">
+                <span className="value">{result.num_points}</span>
+                <span className="label">3-D points</span>
+              </div>
+              <div className="result-metric">
+                <span className="value">{result.initial_focal?.toFixed(0)}</span>
+                <span className="label">Initial focal (px)</span>
+              </div>
+              <div className="result-metric">
+                <span className="value">{result.image_size?.join('×')}</span>
+                <span className="label">Image size (px)</span>
+              </div>
+
+              <h4 style={{ fontSize: 13, marginTop: 16, marginBottom: 6 }}>Camera Matrix</h4>
+              {K && (
+                <table className="calib-table">
+                  <thead><tr><th>fx</th><th>fy</th><th>cx</th><th>cy</th></tr></thead>
+                  <tbody><tr>
+                    <td>{K[0][0].toFixed(2)}</td>
+                    <td>{K[1][1].toFixed(2)}</td>
+                    <td>{K[0][2].toFixed(2)}</td>
+                    <td>{K[1][2].toFixed(2)}</td>
+                  </tr></tbody>
+                </table>
+              )}
+
+              <h4 style={{ fontSize: 13, marginTop: 12, marginBottom: 6 }}>Distortion Coefficients</h4>
+              <table className="calib-table">
+                <thead><tr><th>k1</th><th>k2</th><th>p1</th><th>p2</th><th>k3</th></tr></thead>
+                <tbody><tr>
+                  {dist.slice(0, 5).map((d, i) => <td key={i}>{d.toFixed(6)}</td>)}
+                </tr></tbody>
+              </table>
+
+              <div style={{ marginTop: 16 }}>
+                <a className="btn btn-success" href={`/api/single-calib/projects/${project.id}/download`} target="_blank">
+                  ↓ Download calibration.json
+                </a>
+              </div>
+            </div>
+
+            <div className="result-card">
+              <h3>Per-image reprojection error</h3>
+              <table className="calib-table">
+                <thead><tr><th>Image</th><th>RMS (px)</th></tr></thead>
+                <tbody>
+                  {(result.per_image_rms || []).map((row, i) => (
+                    <tr key={i} style={{ cursor: 'pointer', background: previewImg === row.image ? 'var(--bg-hover)' : undefined }}
+                        onClick={() => setPreviewImg(row.image)}>
+                      <td>{row.image}</td>
+                      <td style={{ color: row.rms > 1.5 ? 'var(--danger)' : row.rms > 1.0 ? 'var(--warning)' : 'var(--success)' }}>
+                        {row.rms}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="result-card" style={{ gridColumn: '1 / -1' }}>
+              <h3>Undistortion Preview</h3>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                <select value={previewImg || ''} onChange={e => setPreviewImg(e.target.value)}
+                        style={{ background: 'var(--bg-secondary)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px', fontSize: 13 }}>
+                  {(project.images || []).map(img => <option key={img} value={img}>{img}</option>)}
+                </select>
+                <div style={{ display: 'flex', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                  <button onClick={() => setShowUndistorted(false)}
+                          style={{ padding: '4px 12px', fontSize: 13, border: 'none', cursor: 'pointer', background: !showUndistorted ? 'var(--primary)' : 'transparent', color: !showUndistorted ? '#fff' : 'var(--text)' }}>
+                    Original
+                  </button>
+                  <button onClick={() => setShowUndistorted(true)}
+                          style={{ padding: '4px 12px', fontSize: 13, border: 'none', cursor: 'pointer', background: showUndistorted ? 'var(--primary)' : 'transparent', color: showUndistorted ? '#fff' : 'var(--text)' }}>
+                    Undistorted
+                  </button>
+                </div>
+              </div>
+              {previewImg && (
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, textAlign: 'center' }}>Original</div>
+                    <img src={`/api/single-calib/projects/${project.id}/image/${previewImg}`}
+                         style={{ width: '100%', borderRadius: 6, border: '2px solid ' + (!showUndistorted ? 'var(--primary)' : 'transparent') }}
+                         alt="original" />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, textAlign: 'center' }}>Undistorted</div>
+                    <img src={`/api/single-calib/projects/${project.id}/undistort/${previewImg}`}
+                         style={{ width: '100%', borderRadius: 6, border: '2px solid ' + (showUndistorted ? 'var(--primary)' : 'transparent') }}
+                         alt="undistorted" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProjectItem({ project, isActive, badge, onSelect, onRename, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(project.name);
+  const inputRef = useRef(null);
+
+  const startEdit = (e) => {
+    e.stopPropagation();
+    setDraft(project.name);
+    setEditing(true);
+    setTimeout(() => { inputRef.current?.select(); }, 0);
+  };
+
+  const commit = (e) => {
+    setEditing(false);
+    if (draft.trim() && draft.trim() !== project.name) onRename(e, draft.trim());
+  };
+
+  const onKeyDown = (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.target.blur(); }
+    if (e.key === 'Escape') { setDraft(project.name); setEditing(false); }
+  };
+
+  return (
+    <div
+      className={`project-item ${isActive ? 'active' : ''}`}
+      onClick={editing ? undefined : onSelect}
+    >
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={onKeyDown}
+          onClick={e => e.stopPropagation()}
+          style={{
+            flex: 1, background: 'var(--bg-secondary)', color: 'var(--text)',
+            border: '1px solid var(--primary)', borderRadius: 3,
+            padding: '1px 4px', fontSize: 13, minWidth: 0,
+          }}
+        />
+      ) : (
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.name}</span>
+      )}
+      {!editing && <span className="project-pairs">{badge}</span>}
+      <button className="edit-btn" onClick={startEdit} title="Rename">✎</button>
+      <button className="delete-btn" onClick={onDelete}>✕</button>
+    </div>
+  );
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>

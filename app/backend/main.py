@@ -83,6 +83,21 @@ async def get_project(project_id: str):
         return json.load(f)
 
 
+@app.patch("/api/projects/{project_id}")
+async def rename_project(project_id: str, body: dict):
+    meta_path = os.path.join(project_dir(project_id), "meta.json")
+    if not os.path.isfile(meta_path):
+        raise HTTPException(404, "Project not found")
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "Name must not be empty")
+    with open(meta_path) as f:
+        meta = json.load(f)
+    meta["name"] = name
+    _save_meta(project_id, meta)
+    return meta
+
+
 @app.delete("/api/projects/{project_id}")
 async def delete_project(project_id: str):
     pdir = project_dir(project_id)
@@ -258,6 +273,48 @@ async def get_pairs(project_id: str):
     return meta.get("pairs", [])
 
 
+@app.delete("/api/projects/{project_id}/pairs/{pair_id}")
+async def delete_pair(project_id: str, pair_id: int):
+    pdir = project_dir(project_id)
+    meta_path = os.path.join(pdir, "meta.json")
+    if not os.path.isfile(meta_path):
+        raise HTTPException(404, "Project not found")
+    with open(meta_path) as f:
+        meta = json.load(f)
+
+    pair = next((p for p in meta.get("pairs", []) if p["id"] == pair_id), None)
+    if pair is None:
+        raise HTTPException(404, "Pair not found")
+
+    # Remove image files (ignore if already missing)
+    for channel in ("rgb", "thermal"):
+        img_path = os.path.join(pdir, channel, pair[channel])
+        if os.path.isfile(img_path):
+            os.remove(img_path)
+
+    # Re-key annotations: pairs with id > pair_id shift down by 1
+    old_ann = meta.get("annotations", {})
+    new_ann: Dict[str, Any] = {}
+    for k, v in old_ann.items():
+        try:
+            k_int = int(k)
+        except ValueError:
+            new_ann[k] = v
+            continue
+        if k_int == pair_id:
+            pass  # deleted
+        elif k_int > pair_id:
+            new_ann[str(k_int - 1)] = v
+        else:
+            new_ann[k] = v
+    meta["annotations"] = new_ann
+    _save_meta(project_id, meta)
+
+    # Rebuild pairs list from remaining files
+    _rebuild_pairs(project_id)
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # Serve images
 # ---------------------------------------------------------------------------
@@ -322,6 +379,72 @@ async def save_annotations(project_id: str, body: dict):
     return {"ok": True}
 
 
+@app.post("/api/projects/{project_id}/upload-annotations")
+async def upload_annotations_xml(project_id: str, file: UploadFile = File(...)):
+    """Import annotations from a previously exported pairs.xml file.
+    Points are matched across channels by label and merged into meta.json.
+    Existing annotations for pairs not present in the XML are preserved.
+    """
+    meta_path = os.path.join(project_dir(project_id), "meta.json")
+    if not os.path.isfile(meta_path):
+        raise HTTPException(404, "Project not found")
+    with open(meta_path) as f:
+        meta = json.load(f)
+
+    content = await file.read()
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError as e:
+        raise HTTPException(400, f"Invalid XML: {e}")
+
+    # Parse image elements — id prefix "W" = rgb, "T" = thermal
+    rgb_pts:     Dict[str, Dict[str, List[float]]] = {}
+    thermal_pts: Dict[str, Dict[str, List[float]]] = {}
+
+    for img_el in root.findall("image"):
+        img_id = img_el.get("id", "")
+        if img_id.startswith("W"):
+            pair_id, target = img_id[1:], rgb_pts.setdefault(img_id[1:], {})
+        elif img_id.startswith("T"):
+            pair_id, target = img_id[1:], thermal_pts.setdefault(img_id[1:], {})
+        else:
+            continue
+
+        for pt_el in img_el.findall("points"):
+            label = pt_el.get("label", "")
+            pts_str = pt_el.get("points", "")
+            try:
+                x, y = (float(v) for v in pts_str.split(","))
+                target[label] = [x, y]
+            except (ValueError, TypeError):
+                continue
+
+    # Build annotation objects — only include points present in BOTH channels
+    new_annotations: Dict[str, Any] = {}
+    for pair_id in set(rgb_pts) | set(thermal_pts):
+        rgb_map     = rgb_pts.get(pair_id, {})
+        thermal_map = thermal_pts.get(pair_id, {})
+        labels = sorted(set(rgb_map) & set(thermal_map),
+                        key=lambda l: int(l) if l.isdigit() else l)
+        if not labels:
+            continue
+        new_annotations[pair_id] = {
+            "points": [
+                {"label": lbl, "rgb": rgb_map[lbl], "thermal": thermal_map[lbl]}
+                for lbl in labels
+            ]
+        }
+
+    # Merge: replace only pairs present in the XML; keep everything else
+    merged = meta.get("annotations", {})
+    merged.update(new_annotations)
+    meta["annotations"] = merged
+    _save_meta(project_id, meta)
+    _write_annotations_xml(project_id, meta)
+
+    return {"annotations": meta["annotations"], "imported": len(new_annotations)}
+
+
 def _write_annotations_xml(project_id: str, meta: dict):
     """Write annotations in the original XML format for compatibility."""
     pdir = project_dir(project_id)
@@ -380,6 +503,18 @@ async def upload_initial_calibration(project_id: str, body: dict):
         meta = json.load(f)
 
     meta["initial_calibration"] = body
+    _save_meta(project_id, meta)
+    return {"ok": True}
+
+
+@app.delete("/api/projects/{project_id}/initial-calibration")
+async def delete_initial_calibration(project_id: str):
+    meta_path = os.path.join(project_dir(project_id), "meta.json")
+    if not os.path.isfile(meta_path):
+        raise HTTPException(404, "Project not found")
+    with open(meta_path) as f:
+        meta = json.load(f)
+    meta["initial_calibration"] = None
     _save_meta(project_id, meta)
     return {"ok": True}
 
@@ -622,6 +757,15 @@ async def get_result_image(project_id: str, filename: str):
     return FileResponse(path)
 
 
+@app.get("/api/projects/{project_id}/calibration-result")
+async def get_calibration_result(project_id: str):
+    path = os.path.join(project_dir(project_id), "results", "result.json")
+    if not os.path.isfile(path):
+        return None
+    with open(path) as f:
+        return json.load(f)
+
+
 @app.get("/api/projects/{project_id}/download-calibration")
 async def download_calibration(project_id: str):
     path = os.path.join(project_dir(project_id), "results", "calibration.json")
@@ -757,6 +901,393 @@ async def point_heatmap(project_id: str, rows: int = 8, cols: int = 8):
     result["rows"] = rows
     result["cols"] = cols
     return result
+
+
+# ---------------------------------------------------------------------------
+# Single-camera calibration (checkerboard)
+# ---------------------------------------------------------------------------
+SINGLE_CALIB_ROOT = os.path.join(DATA_ROOT, "_single")
+
+
+def _single_project_dir(project_id: str) -> str:
+    return os.path.join(SINGLE_CALIB_ROOT, project_id)
+
+
+def _save_single_meta(project_id: str, meta: dict):
+    pdir = _single_project_dir(project_id)
+    with open(os.path.join(pdir, "meta.json"), "w") as f:
+        json.dump(meta, f, indent=2)
+
+
+@app.post("/api/single-calib/projects")
+async def create_single_project(name: str = Form("Single Calib")):
+    pid = uuid.uuid4().hex[:12]
+    pdir = _single_project_dir(pid)
+    os.makedirs(os.path.join(pdir, "images"), exist_ok=True)
+    meta = {
+        "id": pid, "name": name,
+        "images": [],
+        "calibration": None,
+    }
+    with open(os.path.join(pdir, "meta.json"), "w") as f:
+        json.dump(meta, f, indent=2)
+    return meta
+
+
+@app.get("/api/single-calib/projects")
+async def list_single_projects():
+    projects = []
+    if not os.path.isdir(SINGLE_CALIB_ROOT):
+        return projects
+    for entry in sorted(os.listdir(SINGLE_CALIB_ROOT)):
+        meta_path = os.path.join(SINGLE_CALIB_ROOT, entry, "meta.json")
+        if os.path.isfile(meta_path):
+            with open(meta_path) as f:
+                projects.append(json.load(f))
+    return projects
+
+
+@app.get("/api/single-calib/projects/{project_id}")
+async def get_single_project(project_id: str):
+    meta_path = os.path.join(_single_project_dir(project_id), "meta.json")
+    if not os.path.isfile(meta_path):
+        raise HTTPException(404, "Project not found")
+    with open(meta_path) as f:
+        return json.load(f)
+
+
+@app.patch("/api/single-calib/projects/{project_id}")
+async def rename_single_project(project_id: str, body: dict):
+    pdir = _single_project_dir(project_id)
+    meta_path = os.path.join(pdir, "meta.json")
+    if not os.path.isfile(meta_path):
+        raise HTTPException(404, "Project not found")
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "Name must not be empty")
+    with open(meta_path) as f:
+        meta = json.load(f)
+    meta["name"] = name
+    _save_single_meta(project_id, meta)
+    return meta
+
+
+@app.delete("/api/single-calib/projects/{project_id}")
+async def delete_single_project(project_id: str):
+    pdir = _single_project_dir(project_id)
+    if os.path.isdir(pdir):
+        shutil.rmtree(pdir)
+    return {"ok": True}
+
+
+@app.post("/api/single-calib/projects/{project_id}/upload")
+async def upload_single_images(
+    project_id: str,
+    files: List[UploadFile] = File(...),
+):
+    pdir = _single_project_dir(project_id)
+    meta_path = os.path.join(pdir, "meta.json")
+    if not os.path.isfile(meta_path):
+        raise HTTPException(404, "Project not found")
+    with open(meta_path) as f:
+        meta = json.load(f)
+
+    _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
+    _VIDEO_EXTS = (".mp4", ".mov", ".avi", ".mkv", ".mts", ".m4v", ".wmv")
+
+    saved = []
+    for f in files:
+        ext = os.path.splitext(f.filename or "img.jpg")[1].lower()
+        if ext in _IMAGE_EXTS:
+            dest = os.path.join(pdir, "images", f.filename)
+            with open(dest, "wb") as out:
+                content = await f.read()
+                out.write(content)
+            if f.filename not in meta["images"]:
+                meta["images"].append(f.filename)
+            saved.append(f.filename)
+        elif ext in _VIDEO_EXTS:
+            tmp_path = os.path.join(pdir, f"_tmp_{f.filename}")
+            with open(tmp_path, "wb") as out:
+                content = await f.read()
+                out.write(content)
+            try:
+                cap = cv2.VideoCapture(tmp_path)
+                if not cap.isOpened():
+                    continue
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if total_frames <= 0:
+                    cap.release()
+                    continue
+                central_idx = total_frames // 2
+                cap.set(cv2.CAP_PROP_POS_FRAMES, central_idx)
+                ret, frame = cap.read()
+                cap.release()
+                if not ret or frame is None:
+                    continue
+                out_name = f"{Path(f.filename).stem}_frame{central_idx:06d}.jpg"
+                cv2.imwrite(os.path.join(pdir, "images", out_name), frame)
+                if out_name not in meta["images"]:
+                    meta["images"].append(out_name)
+                saved.append(out_name)
+            finally:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+
+    _save_single_meta(project_id, meta)
+    return {"saved": saved, "images": meta["images"]}
+
+
+@app.get("/api/single-calib/projects/{project_id}/image/{filename}")
+async def get_single_image(project_id: str, filename: str):
+    path = os.path.join(_single_project_dir(project_id), "images", filename)
+    if not os.path.isfile(path):
+        raise HTTPException(404, "Image not found")
+    return FileResponse(path)
+
+
+@app.delete("/api/single-calib/projects/{project_id}/image/{filename}")
+async def delete_single_image(project_id: str, filename: str):
+    pdir = _single_project_dir(project_id)
+    meta_path = os.path.join(pdir, "meta.json")
+    if not os.path.isfile(meta_path):
+        raise HTTPException(404, "Project not found")
+
+    img_path = os.path.join(pdir, "images", filename)
+    if not os.path.isfile(img_path):
+        raise HTTPException(404, "Image not found")
+    os.remove(img_path)
+
+    with open(meta_path) as f:
+        meta = json.load(f)
+    meta["images"] = [fn for fn in meta.get("images", []) if fn != filename]
+    meta["calibration"] = None  # invalidate stale calibration
+    _save_single_meta(project_id, meta)
+    return {"ok": True, "images": meta["images"]}
+
+
+def _sfm_calibrate(image_paths: list, w: int, h: int) -> dict:
+    """
+    SfM-based intrinsic calibration powered by COLMAP (via pycolmap).
+
+    Pipeline
+    --------
+    1. SIFT feature extraction  (OPENCV camera model: fx,fy,cx,cy,k1,k2,p1,p2)
+    2. Exhaustive feature matching
+    3. Incremental reconstruction with global bundle adjustment
+    4. Extract calibrated K + distortion; compute per-image reprojection error
+    """
+    import pycolmap
+    import tempfile
+    import shutil
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as _tmpdir:
+        tmpdir = Path(_tmpdir)
+        image_dir = tmpdir / "images"
+        image_dir.mkdir()
+        db_path = str(tmpdir / "database.db")
+        sparse_dir = tmpdir / "sparse"
+        sparse_dir.mkdir()
+
+        # Copy images; prefix duplicates to avoid name collisions
+        seen: set = set()
+        name_map: Dict[str, str] = {}   # colmap name → original path
+        for i, p in enumerate(image_paths):
+            fname = Path(p).name
+            if fname in seen:
+                fname = f"{i:04d}_{fname}"
+            seen.add(fname)
+            shutil.copy2(p, image_dir / fname)
+            name_map[fname] = p
+
+        # ── 1. Feature extraction ──────────────────────────────────────────
+        reader_opts = pycolmap.ImageReaderOptions()
+        reader_opts.camera_model = "OPENCV"   # fx, fy, cx, cy, k1, k2, p1, p2
+
+        extraction_opts = pycolmap.FeatureExtractionOptions()
+        extraction_opts.sift.max_num_features = 8192
+
+        pycolmap.extract_features(
+            database_path=db_path,
+            image_path=str(image_dir),
+            camera_mode=pycolmap.CameraMode.SINGLE,
+            reader_options=reader_opts,
+            extraction_options=extraction_opts,
+        )
+
+        # ── 2. Exhaustive matching ─────────────────────────────────────────
+        pycolmap.match_exhaustive(database_path=db_path)
+
+        # ── 3. Incremental reconstruction ─────────────────────────────────
+        maps = pycolmap.incremental_mapping(
+            database_path=db_path,
+            image_path=str(image_dir),
+            output_path=str(sparse_dir),
+        )
+
+        if not maps:
+            raise ValueError(
+                "COLMAP reconstruction failed — no models produced. "
+                "Ensure images share sufficient scene overlap."
+            )
+
+        # Pick largest sub-model
+        recon = max(maps.values(), key=lambda r: r.num_reg_images())
+        num_reg = recon.num_reg_images()
+        num_pts = recon.num_points3D()
+
+        if num_reg < 2:
+            raise ValueError(
+                f"Only {num_reg} image(s) registered by COLMAP. "
+                "Add more images with scene overlap."
+            )
+
+        # ── 4. Extract intrinsics ──────────────────────────────────────────
+        # OPENCV model params: [fx, fy, cx, cy, k1, k2, p1, p2]
+        cam = next(iter(recon.cameras.values()))
+        p = list(cam.params)
+        fx, fy, cx_c, cy_c = p[0], p[1], p[2], p[3]
+        k1, k2, p1, p2    = p[4], p[5], p[6], p[7]
+
+        mtx  = np.array([[fx, 0, cx_c], [0, fy, cy_c], [0, 0, 1]], dtype=np.float64)
+        dist = np.array([k1, k2, p1, p2, 0.0], dtype=np.float64)
+
+        # ── 5. Per-image reprojection error ───────────────────────────────
+        per_img: Dict[str, list] = {}
+        for img in recon.images.values():
+            pose = img.cam_from_world()
+            R = pose.rotation.matrix()
+            t = np.array(pose.translation)
+            rvec, _ = cv2.Rodrigues(R)
+
+            obj_pts, obs_pts = [], []
+            for pt2d in img.points2D:
+                if not pt2d.has_point3D():
+                    continue
+                obj_pts.append(recon.points3D[pt2d.point3D_id].xyz)
+                obs_pts.append(pt2d.xy)
+
+            if len(obj_pts) < 3:
+                continue
+
+            proj, _ = cv2.projectPoints(
+                np.array(obj_pts, dtype=np.float64),
+                rvec, t, mtx, dist,
+            )
+            proj = proj.reshape(-1, 2)
+            obs  = np.array(obs_pts, dtype=np.float64)
+            errs = np.linalg.norm(proj - obs, axis=1)
+            per_img[img.name] = errs.tolist()
+
+        # Overall RMS across all images
+        all_sq = [e ** 2 for errs in per_img.values() for e in errs]
+        rms_final = float(np.sqrt(np.mean(all_sq))) if all_sq else 0.0
+
+        per_image_rms = [
+            {"image": name, "rms": round(float(np.sqrt(np.mean([e**2 for e in errs]))), 4)}
+            for name, errs in sorted(per_img.items())
+        ]
+
+        # Count image pairs that share triangulated 3-D points
+        img_pairs: set = set()
+        for pt3d in recon.points3D.values():
+            ids = [e.image_id for e in pt3d.track.elements]
+            for a in range(len(ids)):
+                for b in range(a + 1, len(ids)):
+                    img_pairs.add((min(ids[a], ids[b]), max(ids[a], ids[b])))
+
+        return {
+            "rms": round(rms_final, 4),
+            "mtx": mtx.tolist(),
+            "dist": dist.tolist(),
+            "image_size": [w, h],
+            "num_images": num_reg,
+            "num_points": num_pts,
+            "num_pairs": len(img_pairs),
+            "initial_focal": round((fx + fy) / 2, 2),
+            "per_image_rms": per_image_rms,
+        }
+
+
+@app.post("/api/single-calib/projects/{project_id}/calibrate")
+async def run_single_camera_calibration(project_id: str, body: dict):
+    """SfM-based intrinsic calibration — no calibration target required."""
+    pdir = _single_project_dir(project_id)
+    meta_path = os.path.join(pdir, "meta.json")
+    if not os.path.isfile(meta_path):
+        raise HTTPException(404, "Project not found")
+    with open(meta_path) as f:
+        meta = json.load(f)
+
+    images = meta.get("images", [])
+    if len(images) < 2:
+        raise HTTPException(400, f"Need at least 2 images, got {len(images)}")
+
+    img_size = None
+    for fname in images:
+        img = cv2.imread(os.path.join(pdir, "images", fname))
+        if img is not None:
+            h_i, w_i = img.shape[:2]
+            img_size = (w_i, h_i)
+            break
+    if img_size is None:
+        raise HTTPException(400, "Cannot read any uploaded image")
+
+    image_paths = [os.path.join(pdir, "images", f) for f in images]
+    try:
+        result = _sfm_calibrate(image_paths, img_size[0], img_size[1])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"SfM calibration failed: {e}")
+
+    with open(os.path.join(pdir, "calibration.json"), "w") as f:
+        json.dump(
+            {"name": meta.get("name", "Camera"), "mtx": result["mtx"], "dist": result["dist"]},
+            f, indent=2,
+        )
+
+    meta["calibration"] = result
+    _save_single_meta(project_id, meta)
+    return result
+
+
+@app.get("/api/single-calib/projects/{project_id}/download")
+async def download_single_calibration(project_id: str):
+    path = os.path.join(_single_project_dir(project_id), "calibration.json")
+    if not os.path.isfile(path):
+        raise HTTPException(404, "No calibration result yet")
+    return FileResponse(path, filename="calibration.json", media_type="application/json")
+
+
+@app.get("/api/single-calib/projects/{project_id}/undistort/{filename}")
+async def get_undistorted_image(project_id: str, filename: str):
+    pdir = _single_project_dir(project_id)
+    calib_path = os.path.join(pdir, "calibration.json")
+    img_path = os.path.join(pdir, "images", filename)
+    if not os.path.isfile(calib_path):
+        raise HTTPException(404, "No calibration result yet")
+    if not os.path.isfile(img_path):
+        raise HTTPException(404, "Image not found")
+    with open(calib_path) as f:
+        cal = json.load(f)
+    mtx = np.array(cal["mtx"], dtype=np.float64)
+    dist = np.array(cal["dist"], dtype=np.float64)
+    img = cv2.imread(img_path)
+    if img is None:
+        raise HTTPException(400, "Could not read image")
+    h, w = img.shape[:2]
+    new_mtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), alpha=0)
+    undist = cv2.undistort(img, mtx, dist, None, new_mtx)
+    x, y, rw, rh = roi
+    if rw > 0 and rh > 0:
+        undist = undist[y:y+rh, x:x+rw]
+    ok, buf = cv2.imencode(".jpg", undist, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    if not ok:
+        raise HTTPException(500, "Failed to encode image")
+    return Response(content=buf.tobytes(), media_type="image/jpeg")
 
 
 # ---------------------------------------------------------------------------
